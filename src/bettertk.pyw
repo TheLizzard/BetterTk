@@ -8,7 +8,9 @@ USING_WINDOWS = ("win" in sys.platform)
 THEME_OPTIONS = ("light", "dark")
 
 # Unchangable settings:
-NUMBER_OF_CUSTOM_BUTTONS = 10
+NUMBER_OF_CUSTOM_BUTTONS = 10 # The number of custom buttons allowed at 1 time
+MIN_WIDTH = 240 # The minimum width to hide the dummy window
+MIN_HEIGHT = 80 # The minimum height to hide the dummy window
 
 
 class BetterTkSettings:
@@ -115,8 +117,12 @@ class CustomButton(tk.Button):
                          command=lambda: self.callback())
         self.column = column
 
-        super().config(bg=self.betterroot.settings.THEME_INACTIVE_TITLEBAR_BG,
-                       fg=self.betterroot.settings.THEME_INACTIVE_TITLEBAR_FG)
+        active_bg = self.betterroot.settings.THEME_ACTIVE_TITLEBAR_BG
+        active_fg = self.betterroot.settings.THEME_ACTIVE_TITLEBAR_FG
+        inactive_bg = self.betterroot.settings.THEME_INACTIVE_TITLEBAR_BG
+        inactive_fg = self.betterroot.settings.THEME_INACTIVE_TITLEBAR_FG
+        super().config(bg=inactive_bg, activebackground=active_bg,
+                       fg=inactive_fg, activeforeground=active_fg)
 
     def show(self, column=None):
         """
@@ -362,6 +368,7 @@ class BetterTk(tk.Frame):
         else:
             self.root.attributes("-type", "splash")
         self.geometry(geometry)
+        self.root.minsize(MIN_WIDTH, MIN_HEIGHT)
         self.root.bind("<FocusIn>", self.window_focused)
         self.root.bind("<FocusOut>", self.window_unfocused)
 
@@ -417,6 +424,11 @@ class BetterTk(tk.Frame):
 
         self.buttons = [self.minimise_button, self.fullscreen_button,
                         self.close_button]
+
+        bg = self.settings.THEME_ACTIVE_TITLEBAR_BG
+        fg = self.settings.THEME_ACTIVE_TITLEBAR_FG
+        for button in self.buttons:
+            button.config(activebackground=bg, activeforeground=fg)
 
         self.window_unfocused()
 
@@ -657,14 +669,15 @@ class ResizableWindow:
         self.frame.bind("<Enter>", self.change_cursor_resizing)
         self.frame.bind("<Motion>", self.change_cursor_resizing)
 
-        frame.bind("<Button-1>", self.mouse_press)
-        frame.bind("<B1-Motion>", self.mouse_motion)
-        frame.bind("<ButtonRelease-1>", self.mouse_release)
+        self.frame.bind("<Button-1>", self.mouse_press)
+        self.frame.bind("<B1-Motion>", self.mouse_motion)
+        self.frame.bind("<ButtonRelease-1>", self.mouse_release)
 
         self.started_resizing = False
 
-    def mouse_motion(self, event):
+    def mouse_motion(self, event:tk.Event) -> None:
         if self.started_resizing:
+            # Must be a list for `self.update_resizing_params` to change it
             new_params = [self.current_width, self.current_height,
                           self.currentx, self.currenty]
 
@@ -682,7 +695,7 @@ class ResizableWindow:
     def mouse_release(self, event):
         self.started_resizing = False
 
-    def mouse_press(self, event):
+    def mouse_press(self, event:tk.Event) -> None:
         if self.betterroot.is_full_screen:
             return None
         # Resizing the window:
@@ -699,7 +712,7 @@ class ResizableWindow:
                 self.quadrant_resizing = quadrant_resizing
 
     # For resizing:
-    def change_cursor_resizing(self, event):
+    def change_cursor_resizing(self, event) -> None:
         if self.betterroot.is_full_screen:
             self.frame.config(cursor="arrow")
             return None
@@ -737,7 +750,7 @@ class ResizableWindow:
             # Available on Windows/Linux
             self.frame.config(cursor="sb_h_double_arrow")
 
-    def get_quadrant_resizing(self):
+    def get_quadrant_resizing(self) -> str:
         x, y = self.betterroot.root.winfo_pointerx(), self.betterroot.root.winfo_pointery()
         width, height = self.betterroot.root.winfo_width(), self.betterroot.root.winfo_height()
 
@@ -758,37 +771,41 @@ class ResizableWindow:
                     quadrant_resizing += "w"
         return quadrant_resizing
 
-    def resize_east(self):
+    def resize_east(self) -> (int, int, int, int):
         x = self.betterroot.root.winfo_pointerx()
         new_width = x - self.currentx
-        if new_width < 240:
-            new_width = 240
+        if new_width < MIN_WIDTH:
+            new_width = MIN_WIDTH
         return new_width, None, None, None
 
-    def resize_south(self):
-        y = self.betterroot.root.winfo_pointery()
-        new_height = y - self.currenty
-        if new_height < 80:
-            new_height = 80
-        return None, new_height, None, None
-
-    def resize_north(self):
-        y = self.betterroot.root.winfo_pointery()
-        dy = self.currenty - y
-        if dy < 80 - self.current_height:
-            dy = 80 - self.current_height
-        new_height = self.current_height + dy
-        return None, new_height, None, self.currenty - dy
-
-    def resize_west(self):
+    def resize_west(self) -> (int, int, int, int):
         x = self.betterroot.root.winfo_pointerx()
         dx = self.currentx - x
-        if dx < 240 - self.current_width:
-            dx = 240 - self.current_width
+        if dx < MIN_WIDTH - self.current_width:
+            dx = MIN_WIDTH - self.current_width
         new_width = self.current_width + dx
         return new_width, None, self.currentx - dx, None
 
-    def update_resizing_params(self, _list, _tuple):
+    def resize_south(self) -> (int, int, int, int):
+        y = self.betterroot.root.winfo_pointery()
+        new_height = y - self.currenty
+        if new_height < MIN_HEIGHT:
+            new_height = MIN_HEIGHT
+        return None, new_height, None, None
+
+    def resize_north(self) -> (int, int, int, int):
+        y = self.betterroot.root.winfo_pointery()
+        dy = self.currenty - y
+        if dy < MIN_HEIGHT - self.current_height:
+            dy = MIN_HEIGHT - self.current_height
+        new_height = self.current_height + dy
+        return None, new_height, None, self.currenty - dy
+
+    def update_resizing_params(self, _list:list, _tuple:tuple):
+        """
+        Changes each element of `_list` to the corresponding on in `_tuple`
+        if that element is not `None`. If it is, ignore it.
+        """
         for i in range(len(_tuple)):
             element = _tuple[i]
             if element is not None:
@@ -833,6 +850,7 @@ class DraggableWindow:
 # Example 1:
 if __name__ == "__main__":
     root = BetterTk()
+    root.title("Example 1")
     root.geometry("400x400")
     # Adding a custom button:
     root.custom_buttons = {"name": "?",
@@ -849,10 +867,15 @@ if __name__ == "__main__":
 # Example 2
 if __name__ == "__main__":
     settings = BetterTkSettings(theme="light")
-    settings.config(separator_colour="red", use_unicode=True,)
-                    #inactive_titlebar_bg="white")
+    settings.config(separator_colour="red", use_unicode=True,
+                    active_titlebar_bg="#00ff00",
+                    inactive_titlebar_bg="#009900",
+                    active_titlebar_fg="white",
+                    inactive_titlebar_fg="white",
+                    hightlight_colour="cyan")
     root = BetterTk(settings=settings)
     root.geometry("400x400")
+    root.title("Example 2")
 
     # Adding a custom button:
     root.custom_buttons = {"name": "?",
