@@ -1,8 +1,8 @@
 from PIL import Image, ImageTk
 import tkinter as tk
 
-import sys
-USING_WINDOWS = ("win" in sys.platform)
+from sys import platform
+USING_WINDOWS = ("win" in platform)
 
 
 THEME_OPTIONS = ("light", "dark")
@@ -11,6 +11,9 @@ THEME_OPTIONS = ("light", "dark")
 NUMBER_OF_CUSTOM_BUTTONS = 10 # The number of custom buttons allowed at 1 time
 MIN_WIDTH = 240 # The minimum width to hide the dummy window
 MIN_HEIGHT = 80 # The minimum height to hide the dummy window
+
+
+__author__ = "TheLizzard"
 
 
 class BetterTkSettings:
@@ -279,10 +282,11 @@ class BetterTk(tk.Frame):
 
     Methods:
         *List of newly defined methods*
-            change_titlebar_bg(new_bg_colour) => None
-            protocol_generate(protocol) => None
+            __init__(master:tk.Misk=None,
+                     settings:BetterTkSettings=DEFAULT_SETTINGS, **kwargs)
+            protocol_generate(protocol:str) -> None
+            topmost() -> None
             #custom_buttons#
-            topmost() => None
 
         *List of methods that act the same was as tkinter.Tk's methods*
             title
@@ -341,16 +345,18 @@ class BetterTk(tk.Frame):
             show(column) => None
             hide() => None
     """
-    def __init__(self, master=None, Class=tk.Tk, settings=DEFAULT_SETTINGS):
+    def __init__(self, master:tk.Misc=None,
+                 settings:BetterTkSettings=DEFAULT_SETTINGS, **kwargs):
         self.settings = settings
         self.settings.started_using()
 
-        if Class == tk.Toplevel:
-            self.root = tk.Toplevel(master)
-        elif Class == tk.Tk:
-            self.root = tk.Tk()
+        if master is None:
+            self.root = tk.Tk(**kwargs)
+        elif isinstance(master, tk.Misc):
+            self.root = tk.Toplevel(master, **kwargs)
         else:
-            raise ValueError("Invalid `Class` argument.")
+            raise ValueError("Invalid `master` argument. It must be " \
+                             "`None` or a class that inherits from `tk.Misc`")
         self.protocols = {"WM_DELETE_WINDOW": self.destroy}
         self.window_destroyed = False
         self.focused_widget = None
@@ -432,7 +438,7 @@ class BetterTk(tk.Frame):
 
         self.window_unfocused()
 
-    def snap_to_side(self, event):
+    def snap_to_side(self, event:tk.Event=None) -> None:
         """
         Moves the window to the side that it's close to.
         """
@@ -456,7 +462,7 @@ class BetterTk(tk.Frame):
             geometry[1] = screen_height - height
         self.geometry("+%i+%i" % tuple(geometry))
 
-    def focus_main(self, event=None):
+    def focus_main(self, event:tk.Event=None) -> None:
         """
         When the dummy window gets focused it passes the focus to the main
         window. It also focuses the last focused widget.
@@ -469,8 +475,11 @@ class BetterTk(tk.Frame):
             self.focused_widget.focus_force()
 
     def get_focused_widget(self, event:tk.Event=None) -> None:
+        """
+        Get's the focused widget so that later we can refocus it.
+        """
         widget = self.root.focus_get()
-        if not ((widget == self.root) or (widget == None)):
+        if widget not in (self.root, self.dummy_root, None):
             self.focused_widget = widget
 
     def window_focused(self, event:tk.Event=None) -> None:
@@ -479,7 +488,6 @@ class BetterTk(tk.Frame):
         self.change_titlebar_fg(self.settings.THEME_ACTIVE_TITLEBAR_FG)
 
     def window_unfocused(self, event:tk.Event=None) -> None:
-        self.get_focused_widget()
         self.change_titlebar_bg(self.settings.THEME_INACTIVE_TITLEBAR_BG)
         self.change_titlebar_fg(self.settings.THEME_INACTIVE_TITLEBAR_FG)
 
@@ -488,7 +496,6 @@ class BetterTk(tk.Frame):
         Changes the titlebar's background colour.
         """
         items = (self.title_bar, self.buttons_frame, self.title_label)
-        items += tuple(self.buttons)
         items += tuple(self.buttons)
         if self.icon_label is not None:
             items += (self.icon_label, )
@@ -509,11 +516,9 @@ class BetterTk(tk.Frame):
         Generates a protocol.
         """
         try:
-            function = self.protocols[protocol]
-            function()
+            self.protocols[protocol]()
         except KeyError:
-            raise tk.TclError("Tried generating unknown protocol: \"%s\"" %
-                              protocol)
+            raise tk.TclError(f"Unknown protocol: \"{protocol}\"")
 
     def check_parent_titlebar(self, event:tk.Event) -> bool:
         # Get the widget that was pressed:
@@ -861,6 +866,8 @@ if __name__ == "__main__":
                            "function": lambda: print("\"\u2263\" was pressed"),
                            "column": 2}
     # root.minimise_button.hide()
+    # root.fullscreen_button.hide()
+    # root.close_button.hide()
     root.mainloop()
 
 
