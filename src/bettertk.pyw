@@ -18,28 +18,30 @@ __author__ = "TheLizzard"
 
 class BetterTkSettings:
     def __init__(self, theme="dark", use_unicode=False, snap_threshold=200,
-                 separator_size=1):
+                 separator_size=1, bd=3, use_shadow=False):
         self.SNAP_THRESHOLD = snap_threshold
         self.SEPARATOR_SIZE = separator_size
+        self.BORDER_WIDTH = bd
+        self.USE_SHADOW = use_shadow
 
         self.USE_UNICODE = use_unicode
 
         if theme == "dark":
-            self.THEME_BG = "black"
-            self.THEME_SEP_COLOUR = "grey"
-            self.THEME_HIGHLIGHT = "grey"
-            self.THEME_ACTIVE_TITLEBAR_BG = "black"
-            self.THEME_ACTIVE_TITLEBAR_FG = "white"
-            self.THEME_INACTIVE_TITLEBAR_BG = "grey17"
-            self.THEME_INACTIVE_TITLEBAR_FG = "white"
+            self.BG = "black"
+            self.SEP_COLOUR = "grey"
+            self.HIGHLIGHT = "grey"
+            self.ACTIVE_TITLEBAR_BG = "black"
+            self.ACTIVE_TITLEBAR_FG = "white"
+            self.INACTIVE_TITLEBAR_BG = "grey17"
+            self.INACTIVE_TITLEBAR_FG = "white"
         elif theme == "light":
-            self.THEME_BG = "#f0f0ed"
-            self.THEME_SEP_COLOUR = "grey"
-            self.THEME_HIGHLIGHT = "grey"
-            self.THEME_ACTIVE_TITLEBAR_BG = "white"
-            self.THEME_ACTIVE_TITLEBAR_FG = "black"
-            self.THEME_INACTIVE_TITLEBAR_BG = "grey80"
-            self.THEME_INACTIVE_TITLEBAR_FG = "black"
+            self.BG = "#f0f0ed"
+            self.SEP_COLOUR = "grey"
+            self.HIGHLIGHT = "grey"
+            self.ACTIVE_TITLEBAR_BG = "white"
+            self.ACTIVE_TITLEBAR_FG = "black"
+            self.INACTIVE_TITLEBAR_BG = "grey80"
+            self.INACTIVE_TITLEBAR_FG = "black"
         else:
             raise ValueError("Invalid theme option.")
 
@@ -54,8 +56,9 @@ class BetterTkSettings:
 
     def config(self, bg=None, separator_colour=None, hightlight_colour=None,
                active_titlebar_bg=None, active_titlebar_fg=None,
-               inactive_titlebar_bg=None, inactive_titlebar_fg=None,
-               use_unicode=None, snap_threshold=None, separator_size=None):
+               inactive_titlebar_bg=None, inactive_titlebar_fg=None, bd=None,
+               use_unicode=None, snap_threshold=None, separator_size=None,
+               use_shadow=None):
         """
         Possible settings:
             bg:str                    The window's background colour
@@ -73,6 +76,10 @@ class BetterTkSettings:
             separator_size:int        The separator's height that is between
                                       the titlebar and your widgets
                                       (Best to keep it around 1)
+            bd:int                    The boarder width of the window
+            use_shadow:int            Should the window use a semi transparent
+                                      border. If `False` the boarder isn't
+                                      transparent.
 
         Notes:
             You can't change the settings while there is a BetterTk window
@@ -83,19 +90,23 @@ class BetterTkSettings:
             raise Exception("It isn't safe to change the settings while " \
                             "the window is running.")
         if bg is not None:
-            self.THEME_BG = bg
+            self.BG = bg
         if separator_colour is not None:
-            self.THEME_SEP_COLOUR = separator_colour
+            self.SEP_COLOUR = separator_colour
         if hightlight_colour is not None:
-            self.THEME_HIGHLIGHT = hightlight_colour
+            self.HIGHLIGHT = hightlight_colour
         if active_titlebar_bg is not None:
-            self.THEME_ACTIVE_TITLEBAR_BG = active_titlebar_bg
+            self.ACTIVE_TITLEBAR_BG = active_titlebar_bg
         if active_titlebar_fg is not None:
-            self.THEME_ACTIVE_TITLEBAR_FG = active_titlebar_fg
+            self.ACTIVE_TITLEBAR_FG = active_titlebar_fg
         if inactive_titlebar_bg is not None:
-            self.THEME_INACTIVE_TITLEBAR_BG = inactive_titlebar_bg
+            self.INACTIVE_TITLEBAR_BG = inactive_titlebar_bg
         if inactive_titlebar_fg is not None:
-            self.THEME_INACTIVE_TITLEBAR_FG = inactive_titlebar_fg
+            self.INACTIVE_TITLEBAR_FG = inactive_titlebar_fg
+        if bd is not None:
+            self.BORDER_WIDTH = bd
+        if use_shadow is not None:
+            self.USE_SHADOW = use_shadow
         if use_unicode is not None:
             self.USE_UNICODE = use_unicode
         if snap_threshold is not None:
@@ -120,10 +131,10 @@ class CustomButton(tk.Button):
                          command=lambda: self.callback())
         self.column = column
 
-        active_bg = self.betterroot.settings.THEME_ACTIVE_TITLEBAR_BG
-        active_fg = self.betterroot.settings.THEME_ACTIVE_TITLEBAR_FG
-        inactive_bg = self.betterroot.settings.THEME_INACTIVE_TITLEBAR_BG
-        inactive_fg = self.betterroot.settings.THEME_INACTIVE_TITLEBAR_FG
+        active_bg = self.betterroot.settings.ACTIVE_TITLEBAR_BG
+        active_fg = self.betterroot.settings.ACTIVE_TITLEBAR_FG
+        inactive_bg = self.betterroot.settings.INACTIVE_TITLEBAR_BG
+        inactive_fg = self.betterroot.settings.INACTIVE_TITLEBAR_FG
         super().config(bg=inactive_bg, activebackground=active_bg,
                        fg=inactive_fg, activeforeground=active_fg)
 
@@ -282,8 +293,7 @@ class BetterTk(tk.Frame):
 
     Methods:
         *List of newly defined methods*
-            __init__(master:tk.Misk=None,
-                     settings:BetterTkSettings=DEFAULT_SETTINGS, **kwargs)
+            __init__(master=None, settings:BetterTkSettings=DEFAULT_SETTINGS)
             protocol_generate(protocol:str) -> None
             topmost() -> None
             #custom_buttons#
@@ -345,15 +355,14 @@ class BetterTk(tk.Frame):
             show(column) => None
             hide() => None
     """
-    def __init__(self, master:tk.Misc=None,
-                 settings:BetterTkSettings=DEFAULT_SETTINGS, **kwargs):
+    def __init__(self, master=None, settings:BetterTkSettings=DEFAULT_SETTINGS):
         self.settings = settings
         self.settings.started_using()
 
         if master is None:
-            self.root = tk.Tk(**kwargs)
+            self.root = tk.Tk()
         elif isinstance(master, tk.Misc):
-            self.root = tk.Toplevel(master, **kwargs)
+            self.root = tk.Toplevel(master)
         else:
             raise ValueError("Invalid `master` argument. It must be " \
                              "`None` or a class that inherits from `tk.Misc`")
@@ -361,6 +370,7 @@ class BetterTk(tk.Frame):
         self.window_destroyed = False
         self.focused_widget = None
         self.is_full_screen = False
+        self.geometry_bindings = []
 
         # Create the dummy window
         self.dummy_root = tk.Toplevel(self.root)
@@ -378,14 +388,18 @@ class BetterTk(tk.Frame):
         self.root.bind("<FocusIn>", self.window_focused)
         self.root.bind("<FocusOut>", self.window_unfocused)
 
+        bd = 0
+        if not self.settings.USE_SHADOW:
+            bd = self.settings.BORDER_WIDTH
         # Master frame so that I can add a grey border around the window
-        self.master_frame = tk.Frame(self.root, highlightthickness=3, bd=0,
-                                     highlightbackground=self.settings.THEME_HIGHLIGHT)
+        self.master_frame = tk.Frame(self.root, bd=0, highlightthickness=bd,
+                                     highlightbackground=self.settings.HIGHLIGHT)
         self.master_frame.pack(expand=True, fill="both")
-        self.resizable_window = ResizableWindow(self.master_frame, self)
+        if not self.settings.USE_SHADOW:
+            self.resizable_window = ResizableWindow(self.master_frame, self)
 
         # The actual <tk.Frame> where you can put your widgets
-        super().__init__(self.master_frame, bd=0, bg=self.settings.THEME_BG,
+        super().__init__(self.master_frame, bd=0, bg=self.settings.BG,
                          cursor="arrow")
         super().pack(expand=True, side="bottom", fill="both")
 
@@ -396,7 +410,7 @@ class BetterTk(tk.Frame):
 
         # Add a separator
         self.separator = tk.Frame(self.master_frame, bd=0, cursor="arrow",
-                                  bg=self.settings.THEME_SEP_COLOUR,
+                                  bg=self.settings.SEP_COLOUR,
                                   height=self.settings.SEPARATOR_SIZE)
         self.separator.pack(fill="x")
 
@@ -408,8 +422,8 @@ class BetterTk(tk.Frame):
         self.buttons_frame.pack(expand=True, side="right", anchor="e")
 
         self.title_label = tk.Label(self.title_frame, text="Better Tk",
-                                    bg=self.settings.THEME_ACTIVE_TITLEBAR_BG,
-                                    fg=self.settings.THEME_ACTIVE_TITLEBAR_FG)
+                                    bg=self.settings.ACTIVE_TITLEBAR_BG,
+                                    fg=self.settings.ACTIVE_TITLEBAR_FG)
         self.title_label.grid(row=1, column=2, sticky="news")
         self.icon_label = None
 
@@ -431,12 +445,16 @@ class BetterTk(tk.Frame):
         self.buttons = [self.minimise_button, self.fullscreen_button,
                         self.close_button]
 
-        bg = self.settings.THEME_ACTIVE_TITLEBAR_BG
-        fg = self.settings.THEME_ACTIVE_TITLEBAR_FG
+        bg = self.settings.ACTIVE_TITLEBAR_BG
+        fg = self.settings.ACTIVE_TITLEBAR_FG
         for button in self.buttons:
             button.config(activebackground=bg, activeforeground=fg)
 
         self.window_unfocused()
+
+        if self.settings.USE_SHADOW:
+            self.shadow = Shadow(self, settings)
+            self.resizable_window = ResizableWindow(self.shadow, self)
 
     def snap_to_side(self, event:tk.Event=None) -> None:
         """
@@ -484,12 +502,12 @@ class BetterTk(tk.Frame):
 
     def window_focused(self, event:tk.Event=None) -> None:
         self.get_focused_widget()
-        self.change_titlebar_bg(self.settings.THEME_ACTIVE_TITLEBAR_BG)
-        self.change_titlebar_fg(self.settings.THEME_ACTIVE_TITLEBAR_FG)
+        self.change_titlebar_bg(self.settings.ACTIVE_TITLEBAR_BG)
+        self.change_titlebar_fg(self.settings.ACTIVE_TITLEBAR_FG)
 
     def window_unfocused(self, event:tk.Event=None) -> None:
-        self.change_titlebar_bg(self.settings.THEME_INACTIVE_TITLEBAR_BG)
-        self.change_titlebar_fg(self.settings.THEME_INACTIVE_TITLEBAR_FG)
+        self.change_titlebar_bg(self.settings.INACTIVE_TITLEBAR_BG)
+        self.change_titlebar_fg(self.settings.INACTIVE_TITLEBAR_FG)
 
     def change_titlebar_bg(self, colour:str) -> None:
         """
@@ -594,6 +612,8 @@ class BetterTk(tk.Frame):
             dummy_geometry = "+%i+%i" % (int(posx) + 75, int(posy) + 20)
         self.root.geometry(geometry)
         self.dummy_root.geometry(dummy_geometry)
+        for function in self.geometry_bindings:
+            function(geometry)
 
     def focus_force(self) -> None:
         self.root.deiconify()
@@ -852,6 +872,66 @@ class DraggableWindow:
                         self.betterroot.root.winfo_rooty() + event.y
 
 
+class Shadow(tk.Toplevel):
+    def __init__(self, bettertk, settings):
+        self.bettertk = bettertk
+        self.settings = settings
+
+        self.padding = settings.BORDER_WIDTH
+
+        super().__init__(bettertk)
+        super().overrideredirect(True)
+        super().attributes("-alpha", 0.3)
+        super().config(bg="black")
+
+        bettertk.geometry_bindings.append(self.main_window_changed)
+        super().bind("<FocusIn>", self.focus_main)
+
+        super().after(2, self.refresh)
+        super().after(50, self.focus_main)
+
+    def config(self, alpha:float=None, bd:int=None, bg:str=None, cursor:str=None):
+        if alpha is not None:
+            super().attributes("-alpha", alpha)
+        if bd is not None:
+            self.padding = bd
+        if bg is not None:
+            super().config(bg=bg)
+        if cursor is not None:
+            super().config(cursor=cursor)
+
+    def focus_main(self, event:tk.Event=None) -> None:
+        self.bettertk.root.lift()
+        self.bettertk.focus_force()
+
+    def main_window_changed(self, new_geometry:str) -> None:
+        width = height = None
+        x = y = None
+        if "x" in new_geometry:
+            width, height = new_geometry.split("x")
+            if "+" in height:
+                height, x, y = height.split("+")
+        else:
+            _, x, y = new_geometry.split("+")
+
+        padding2 = self.padding * 2
+        geometry = ""
+        if width is not None:
+            geometry += f"{int(width)+padding2}x{int(height)+padding2}"
+        if x is not None:
+            geometry += f"+{int(x)-self.padding}+{int(y)-self.padding}"
+        super().geometry(geometry)
+
+    def refresh(self, event:tk.Event=None) -> None:
+        padding2 = self.padding * 2
+        width = self.bettertk.root.winfo_width()
+        height = self.bettertk.root.winfo_height()
+        x = self.bettertk.root.winfo_rootx()
+        y = self.bettertk.root.winfo_rooty()
+        super().geometry(f"{width+padding2}x{height+padding2}" \
+                         f"+{x-self.padding}+{y-self.padding}")
+
+
 # Example 1:
 if __name__ == "__main__":
     root = BetterTk()
@@ -894,5 +974,18 @@ if __name__ == "__main__":
     label = tk.Label(root, text="This is just to show how to change the " \
                      "window's settings.\nI know it looks bad.", justify="left")
     label.pack(anchor="w")
+
+    root.mainloop()
+
+
+# Example 3:
+if __name__ == "__main__":
+    settings = BetterTkSettings(theme="dark", use_shadow=True, bd=3)
+
+    root = BetterTk(settings=settings)
+    root.title("Example 3")
+    root.geometry("400x400")
+
+    root.shadow.config(alpha=0.3, bd=3, bg="black")
 
     root.mainloop()
