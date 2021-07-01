@@ -127,7 +127,7 @@ class CustomButton(tk.Button):
             self.callback = lambda: None
         else:
             self.callback = function
-        super().__init__(master, text=name, relief="flat",
+        super().__init__(master, text=name, relief="flat", takefocus=False,
                          command=lambda: self.callback())
         self.column = column
 
@@ -160,7 +160,7 @@ class MinimiseButton(tk.Button):
             text = "\u2014"
         else:
             text = "_"
-        super().__init__(master, text=text, relief="flat",
+        super().__init__(master, text=text, relief="flat", takefocus=False,
                          command=self.minimise_window)
 
     def minimise_window(self):
@@ -190,7 +190,7 @@ class FullScreenButton(tk.Button):
             text = "\u2610"
         else:
             text = "[]"
-        super().__init__(master, text=text, relief="flat",
+        super().__init__(master, text=text, relief="flat", takefocus=False,
                          command=self.toggle_fullscreen)
 
     def toggle_fullscreen(self, event=None):
@@ -257,7 +257,7 @@ class CloseButton(tk.Button):
             text = "\u26cc"
         else:
             text = "X"
-        super().__init__(master, text=text, relief="flat",
+        super().__init__(master, text=text, relief="flat", takefocus=False,
                          command=self.close_window_protocol)
 
     def close_window_protocol(self):
