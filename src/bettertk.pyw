@@ -214,6 +214,9 @@ class FullScreenButton(tk.Button):
         """
         if self.betterroot.is_full_screen:
             return "error"
+        if not (self.betterroot.resizable_window.resizable_vertical and \
+                self.betterroot.resizable_window.resizable_horizontal):
+            return "can't"
         super().config(command=self.notfullscreen)
         if USING_WINDOWS:
             self.betterroot.root.overrideredirect(False)
@@ -401,12 +404,14 @@ class BetterTk(tk.Frame):
         # The actual <tk.Frame> where you can put your widgets
         super().__init__(self.master_frame, bd=0, bg=self.settings.BG,
                          cursor="arrow")
-        super().pack(expand=True, side="bottom", fill="both")
 
         # Set up the title bar frame
         self.title_bar = tk.Frame(self.master_frame, bd=0, cursor="arrow")
         self.title_bar.pack(side="top", fill="x")
         self.draggable_window = DraggableWindow(self.title_bar, self)
+
+        # Needs to packed after `self.title_bar`.
+        super().pack(expand=True, side="bottom", fill="both")
 
         # Add a separator
         self.separator = tk.Frame(self.master_frame, bd=0, cursor="arrow",
@@ -645,6 +650,11 @@ class BetterTk(tk.Frame):
             self.resizable_window.resizable_horizontal = width
         if height is not None:
             self.resizable_window.resizable_vertical = height
+        if self.resizable_window.resizable_horizontal and \
+           self.resizable_window.resizable_vertical:
+            self.fullscreen_button.show()
+        else:
+            self.fullscreen_button.hide()
         return None
 
     def attributes(self, *args, **kwargs):
