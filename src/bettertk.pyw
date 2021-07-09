@@ -989,7 +989,7 @@ if __name__ == "__main__":
 
 
 # Example 3 (not working):
-if __name__ == "__main__|down't work":
+if __name__ == "__main__|doesn't work":
     settings = BetterTkSettings(theme="dark", use_shadow=True, bd=3)
 
     root = BetterTk(settings=settings)
