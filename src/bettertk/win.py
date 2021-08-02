@@ -426,6 +426,8 @@ class BetterTk(tk.Frame):
             button.config(activebackground=bg, activeforeground=fg)
 
         self.window_unfocused()
+        self.root.bind("<FocusIn>", self.window_focused)
+        self.root.bind("<FocusOut>", self.window_unfocused)
 
     def fullscreen(self) -> None:
         self.root.fullscreen()
@@ -470,7 +472,6 @@ class BetterTk(tk.Frame):
         self.geometry("+%i+%i" % tuple(geometry))
 
     def window_focused(self, event:tk.Event=None) -> None:
-        #self.get_focused_widget()
         self.change_titlebar_bg(self.settings.ACTIVE_TITLEBAR_BG)
         self.change_titlebar_fg(self.settings.ACTIVE_TITLEBAR_FG)
 
