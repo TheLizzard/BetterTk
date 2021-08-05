@@ -13,7 +13,10 @@ else:
         from linux import *
 
 
-from old_bettertk import BetterTk as BetterTkV1
+try:
+    from .old_bettertk import BetterTk as BetterTkV1
+except ImportError:
+    from old_bettertk import BetterTk as BetterTkV1
 
 
 if __name__ == "__main__":

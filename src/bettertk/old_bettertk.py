@@ -442,9 +442,10 @@ class BetterTk(tk.Frame):
         self.buttons_frame = tk.Frame(self.title_bar, bd=0)
         self.buttons_frame.pack(expand=True, side="right", anchor="e")
 
-        self.title_label = tk.Label(self.title_frame, text="Better Tk",
+        self.title_label = tk.Label(self.title_frame, text="",
                                     bg=self.settings.ACTIVE_TITLEBAR_BG,
                                     fg=self.settings.ACTIVE_TITLEBAR_FG)
+        self.title("Better Tk")
         self.title_label.grid(row=1, column=2, sticky="news")
         self.icon_label = None
 

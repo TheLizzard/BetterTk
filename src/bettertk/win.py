@@ -358,7 +358,6 @@ class BetterTk(tk.Frame):
         self.root = NoTitlebarTk(master)
         self.protocols = {"WM_DELETE_WINDOW": self.destroy}
         self.window_destroyed = False
-        self.is_full_screen = False
         self.geometry_bindings = []
 
         self.root.protocol("WM_DELETE_WINDOW", lambda: self.protocol_generate("WM_DELETE_WINDOW"))
@@ -399,9 +398,10 @@ class BetterTk(tk.Frame):
         self.buttons_frame = tk.Frame(self.title_bar, bd=0)
         self.buttons_frame.pack(expand=True, side="right", anchor="e")
 
-        self.title_label = tk.Label(self.title_frame, text="Better Tk",
+        self.title_label = tk.Label(self.title_frame, text="",
                                     bg=self.settings.ACTIVE_TITLEBAR_BG,
                                     fg=self.settings.ACTIVE_TITLEBAR_FG)
+        self.title("Better Tk")
         self.title_label.grid(row=1, column=2, sticky="news")
         self.icon_label = None
 
@@ -546,6 +546,10 @@ class BetterTk(tk.Frame):
     @disable_north_west_resizing.setter
     def disable_north_west_resizing(self, value:bool) -> None:
         self.resizable_window.disable_north_west_resizing = value
+
+    @property
+    def is_full_screen(self) -> bool:
+        return self.root._fullscreen
 
     # Normal <tk.Tk> methods:
     def title(self, title:str=None) -> str:
