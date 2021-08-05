@@ -1,3 +1,5 @@
+# Partialy taken from @BryanOakley's answer here:
+# https://stackoverflow.com/a/57350295/11106801
 import tkinter as tk
 
 
