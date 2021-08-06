@@ -3,8 +3,6 @@ import tkinter as tk
 
 FIT_WIDTH = "fit_width"
 FIT_HEIGHT = "fit_height"
-ALWAYS_FIT_WIDTH = "always_fit_width"   # Not implemented yet
-ALWAYS_FIT_HEIGHT = "always_fit_height" # Not implemented yet
 
 
 class BetterFrame(tk.Frame):
@@ -12,7 +10,7 @@ class BetterFrame(tk.Frame):
     Also known as `ScrollableFrame`
     There is no way to scroll <tkinter.Frame> so we are
     going to create a canvas and place the frame there.
-    Scrolling the canvas will give the illution of scrolling
+    Scrolling the canvas will give the illusion of scrolling
     the frame
     Partly taken from:
         https://blog.tecladocode.com/tkinter-scrollable-frames/
@@ -33,7 +31,7 @@ class BetterFrame(tk.Frame):
     """
     def __init__(self, master=None, scroll_speed:int=2, hscroll:bool=False,
                  vscroll:bool=True, bd:int=0, scrollbar_kwargs={},
-                 HScrollBarClass=tk.Scrollbar, bg="white",
+                 HScrollBarClass=tk.Scrollbar, bg="#f0f0ed",
                  VScrollBarClass=tk.Scrollbar, **kwargs):
         assert isinstance(scroll_speed, int), "`scroll_speed` must be an int"
         self.scroll_speed = scroll_speed
@@ -43,7 +41,7 @@ class BetterFrame(tk.Frame):
         self.master_frame.grid_columnconfigure(0, weight=1)
         self.dummy_canvas = tk.Canvas(self.master_frame, highlightthickness=0,
                                       bd=0, bg=bg, **kwargs)
-        super().__init__(self.dummy_canvas)
+        super().__init__(self.dummy_canvas, bg=bg)
 
         # Create the 2 scrollbars
         if vscroll:
@@ -101,35 +99,26 @@ class BetterFrame(tk.Frame):
         """
         Resizes the frame to fit the widgets inside. You must either
         specify (the `fit`) or (the `height` or/and the `width`) parameter.
-
         Parameters:
             fit:str       `fit` can be either `FIT_WIDTH` or `FIT_HEIGHT`.
                           `FIT_WIDTH` makes sure that the frame's width can
                            fit all of the widgets. `FIT_HEIGHT` is simmilar
             height:int     specifies the height of the frame in pixels
             width:int      specifies the width of the frame in pixels
-
-        If you specify the `fit` argument, the `width` and `height` arguments
-        are ignored.
-
         To do:
             ALWAYS_FIT_WIDTH
             ALWAYS_FIT_HEIGHT
         """
-        if fit is None:
-            if height is not None:
-                self.dummy_canvas.config(height=height)
-            if width is not None:
-                self.dummy_canvas.config(width=width)
-        else:
-            if fit == FIT_WIDTH:
-                super().update()
-                self.dummy_canvas.config(width=super().winfo_width())
-            elif fit == FIT_HEIGHT:
-                super().update()
-                self.dummy_canvas.config(height=super().winfo_height())
-            else:
-                raise ValueError("Unknow value for the `fit` parameter.")
+        if height is not None:
+            self.dummy_canvas.config(height=height)
+        if width is not None:
+            self.dummy_canvas.config(width=width)
+        if fit == FIT_WIDTH:
+            super().update()
+            self.dummy_canvas.config(width=super().winfo_width())
+        if fit == FIT_HEIGHT:
+            super().update()
+            self.dummy_canvas.config(height=super().winfo_height())
     fit = resize
 
 
