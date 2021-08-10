@@ -5,6 +5,99 @@ FIT_WIDTH = "fit_width"
 FIT_HEIGHT = "fit_height"
 
 
+# A canvas that implements all of the scrollbar stuff by moving all of
+# the items. Useless for now.
+class BetterCanvas(tk.Canvas):
+    __slots__ = ("deltax", "deltay", "xscrollcommand", "yscrollcommand",
+                 "scrollregion")
+
+    def __init__(self, master, **kwargs):
+        self.deltax = 0
+        self.deltay = 0
+        self.xscrollcommand = None
+        self.yscrollcommand = None
+        self.scrollregion = [0, 0, 1, 1]
+        super().__init__(master, **self.parse_kwargs(kwargs))
+
+    def parse_kwargs(self, kwargs) -> None:
+        xscrollcommand = kwargs.pop("xscrollcommand", None)
+        yscrollcommand = kwargs.pop("yscrollcommand", None)
+        scrollregion = kwargs.pop("scrollregion", None)
+        if xscrollcommand is not None:
+            self.xscrollcommand = xscrollcommand
+        if yscrollcommand is not None:
+            self.yscrollcommand = yscrollcommand
+        if scrollregion is not None:
+            self.scrollregion = scrollregion
+        return kwargs
+
+    def config(self, **kwargs) -> None:
+        return super().config(**self.parse_kwargs(kwargs))
+    configure = config
+
+    def bbox(self, what) -> tuple:
+        x1, y1, x2, y2 = super().bbox(what)
+        x1 += self.deltax
+        x2 += self.deltax
+        y1 += self.deltay
+        y2 += self.deltay
+        return (x1, y1, x2, y2)
+
+    def yview(self, *args) -> (float, float) or None:
+        if len(args) == 0:
+            return self._yview()
+
+        if len(args) == 2:
+            if args[0] == "moveto":
+                self.set_first_y(float(args[1]))
+                return None
+
+        if len(args) == 3:
+            if args[0] == "scroll":
+                self.yview_scroll(int(args[1]), args[2])
+                return None
+
+        args = ", ".join(map(repr, args))
+        raise ValueError(f"Unhandled: yview({args})")
+
+    def set_first_y(self, first:float) -> None:
+        old_first, _ = self.yview()
+        number = (first - old_first) * (self.scrollregion[3] - self.scrollregion[1])
+        self.yview_scroll(int(number), "units", scale=False)
+
+    def _yview(self) -> (float, float):
+        canvas_size = super().winfo_height()
+        scrollregion = self.scrollregion[3] - self.scrollregion[1]
+        first = self.deltay / scrollregion
+        last = first + canvas_size / scrollregion
+        return first, last
+
+    def yview_scroll(self, number:int, what:str, /, scale:bool=True) -> None:
+        if what == "pages":
+            first, last = self.yview()
+            first += (last - first) * number
+            self.set_first_y(first)
+        elif what == "units":
+            if scale:
+                number *= 20
+            self.scroll_y_pixels(number)
+        else:
+            raise ValueError(f"Unknown value for \"what\": \"{what}\"")
+        if self.yscrollcommand is not None:
+            self.yscrollcommand(*self.yview())
+
+    def scroll_y_pixels(self, pixels:int) -> None:
+        # Some magic:
+        canvas_size = super().winfo_height()
+        if pixels > 0:
+            pixels = min(pixels, self.scrollregion[3]-self.deltay-canvas_size)
+        elif pixels < 0:
+            pixels = max(pixels, self.scrollregion[1]-self.deltay)
+        if pixels != 0:
+            super().move("all", 0, -pixels)
+            self.deltay += pixels
+
+
 class BetterFrame(tk.Frame):
     """
     Also known as `ScrollableFrame`
