@@ -414,7 +414,10 @@ class BetterTk(tk.Frame):
         for button in self.buttons:
             button.config(activebackground=bg, activeforeground=fg)
 
-        self.window_unfocused()
+        if self.root.focus_displayof() is None:
+            self.window_unfocused()
+        else:
+            self.window_focused()
         self.root.bind("<FocusIn>", self.window_focused)
         self.root.bind("<FocusOut>", self.window_unfocused)
 
@@ -532,6 +535,10 @@ class BetterTk(tk.Frame):
     def custom_buttons(self, value:dict()) -> None:
         self.custom_button = CustomButton(self.buttons_frame, self, **value)
         self.buttons.append(self.custom_button)
+        if self.root.focus_displayof() is None:
+            self.window_unfocused()
+        else:
+            self.window_focused()
 
     @property
     def disable_north_west_resizing(self) -> bool:

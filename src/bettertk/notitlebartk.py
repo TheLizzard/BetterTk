@@ -68,7 +68,7 @@ class NoTitlebarTk(tk.Tk):
         # re-assert the new window style
         super().withdraw()
         super().after(10, self.deiconify)
-        super().after(20, self.focus_force)
+        # super().after(20, self.focus_force) # Might be useless
         self.locked = False
 
     def overrideredirect(self, boolean:bool=None) -> None:
