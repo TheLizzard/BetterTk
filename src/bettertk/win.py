@@ -19,12 +19,10 @@ __author__ = "TheLizzard"
 
 
 class BetterTkSettings:
-    def __init__(self, theme="dark", use_unicode=False, snap_threshold=200,
-                 separator_size=1, bd=3, use_shadow=False):
-        self.SNAP_THRESHOLD = snap_threshold
+    def __init__(self, theme="dark", use_unicode=False, separator_size=1,
+                 bd=3):
         self.SEPARATOR_SIZE = separator_size
         self.BORDER_WIDTH = bd
-        self.USE_SHADOW = use_shadow
 
         self.USE_UNICODE = use_unicode
 
@@ -59,8 +57,7 @@ class BetterTkSettings:
     def config(self, bg=None, separator_colour=None, hightlight_colour=None,
                active_titlebar_bg=None, active_titlebar_fg=None,
                inactive_titlebar_bg=None, inactive_titlebar_fg=None, bd=None,
-               use_unicode=None, snap_threshold=None, separator_size=None,
-               use_shadow=None):
+               use_unicode=None, separator_size=None):
         """
         Possible settings:
             bg:str                    The window's background colour
@@ -74,14 +71,10 @@ class BetterTkSettings:
 
             use_unicode:bool          If the window should use unicode
                                       characters for the buttons
-            snap_threshold:int        Explained in `BetterTkSettings.__doc__`
             separator_size:int        The separator's height that is between
                                       the titlebar and your widgets
                                       (Best to keep it around 1)
             bd:int                    The boarder width of the window
-            use_shadow:int            Should the window use a semi transparent
-                                      border. If `False` the boarder isn't
-                                      transparent.
 
         Notes:
             You can't change the settings while there is a BetterTk window
@@ -107,12 +100,8 @@ class BetterTkSettings:
             self.INACTIVE_TITLEBAR_FG = inactive_titlebar_fg
         if bd is not None:
             self.BORDER_WIDTH = bd
-        if use_shadow is not None:
-            self.USE_SHADOW = use_shadow
         if use_unicode is not None:
             self.USE_UNICODE = use_unicode
-        if snap_threshold is not None:
-            self.SNAP_THRESHOLD = snap_threshold
         if separator_size is not None:
             self.SEPARATOR_SIZE = separator_size
     configure = config
@@ -449,7 +438,7 @@ class BetterTk(tk.Frame):
 
     def snap_to_side(self, event:tk.Event=None) -> None:
         """
-        Moves the window to the side that it's close to.
+        Moves the window to the closest corner.
         """
         if (event is not None) and (not self.check_parent_titlebar(event)):
             return None
@@ -459,17 +448,22 @@ class BetterTk(tk.Frame):
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
 
-        geometry = [rootx, rooty]
+        rootx += width//2
+        rooty += height//2
+        newx = int(rootx/screen_width*2)/2
+        newy = int(rooty/screen_height*2)/2
 
-        if rootx < self.settings.SNAP_THRESHOLD:
-            geometry[0] = 0
-        if rooty < self.settings.SNAP_THRESHOLD:
-            geometry[1] = 0
-        if screen_width - (rootx + width) < self.settings.SNAP_THRESHOLD:
-            geometry[0] = screen_width - width
-        if screen_height - (rooty + height) < self.settings.SNAP_THRESHOLD:
-            geometry[1] = screen_height - height
-        self.geometry("+%i+%i" % tuple(geometry))
+        if int(newx) == newx:
+            newx = int(newx*screen_width)
+        else:
+            newx = int((newx+0.5)*screen_width) - width
+
+        if int(newy) == newy:
+            newy = int(newy*screen_height)
+        else:
+            newy = int((newy+0.5)*screen_height) - height
+
+        self.geometry(f"+{newx}+{newy}")
 
     def window_focused(self, event:tk.Event=None) -> None:
         self.change_titlebar_bg(self.settings.ACTIVE_TITLEBAR_BG)
