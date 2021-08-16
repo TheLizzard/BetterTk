@@ -402,9 +402,10 @@ class BetterTk(tk.Frame):
 
         # When the user double clicks on the titlebar
         self.title_bar.bind_all("<Double-Button-1>",
-                                self.fullscreen_button.toggle_fullscreen)
+                                self.fullscreen_button.toggle_fullscreen,
+                                add=True)
         # When the user middle clicks on the titlebar
-        self.title_bar.bind_all("<Button-2>", self.snap_to_side)
+        self.title_bar.bind_all("<Button-2>", self.snap_to_side, add=True)
 
         self.buttons = [self.minimise_button, self.fullscreen_button,
                         self.close_button]
@@ -418,8 +419,8 @@ class BetterTk(tk.Frame):
             self.window_unfocused()
         else:
             self.window_focused()
-        self.root.bind("<FocusIn>", self.window_focused)
-        self.root.bind("<FocusOut>", self.window_unfocused)
+        self.root.bind("<FocusIn>", self.window_focused, add=True)
+        self.root.bind("<FocusOut>", self.window_unfocused, add=True)
 
     def fullscreen(self) -> None:
         self.root.fullscreen()
@@ -682,12 +683,12 @@ class ResizableWindow:
         self.resizable_horizontal = True
         self.resizable_vertical = True
 
-        self.frame.bind("<Enter>", self.change_cursor_resizing)
-        self.frame.bind("<Motion>", self.change_cursor_resizing)
+        self.frame.bind("<Enter>", self.change_cursor_resizing, add=True)
+        self.frame.bind("<Motion>", self.change_cursor_resizing, add=True)
 
-        self.frame.bind("<Button-1>", self.mouse_press)
-        self.frame.bind("<B1-Motion>", self.mouse_motion)
-        self.frame.bind("<ButtonRelease-1>", self.mouse_release)
+        self.frame.bind("<Button-1>", self.mouse_press, add=True)
+        self.frame.bind("<B1-Motion>", self.mouse_motion, add=True)
+        self.frame.bind("<ButtonRelease-1>", self.mouse_release, add=True)
 
         self.started_resizing = False
 
@@ -822,9 +823,9 @@ class DraggableWindow:
         self.dragging = False
         self._offsetx = 0
         self._offsety = 0
-        self.frame.bind_all("<Button-1>", self.clickwin)
-        self.frame.bind_all("<B1-Motion>", self.dragwin)
-        self.frame.bind_all("<ButtonRelease-1>", self.stopdragwin)
+        self.frame.bind_all("<Button-1>", self.clickwin, add=True)
+        self.frame.bind_all("<B1-Motion>", self.dragwin, add=True)
+        self.frame.bind_all("<ButtonRelease-1>", self.stopdragwin, add=True)
 
     def stopdragwin(self, event):
         self.dragging = False

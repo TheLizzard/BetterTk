@@ -124,6 +124,44 @@ class BetterScrollBarHorizontal(tk.Canvas, BaseBetterScrollBar):
             self._set(x)
 
 
+class ScrolledText(tk.Text):
+    def __init__(self, master, vscroll:bool=True, hscroll:bool=False,
+                 bg:str="black", fg:str="white", **kwargs):
+        self.master_frame = tk.Frame(master, highlightthickness=0, bd=0, bg=bg)
+        self.master_frame.grid_rowconfigure(0, weight=1)
+        self.master_frame.grid_columnconfigure(0, weight=1)
+        super().__init__(self.master_frame, bg=bg, fg=fg, **kwargs)
+        super().grid(row=0, column=0, sticky="news")
+        if vscroll:
+            self.vscroll = BetterScrollBarVertical(self.master_frame,
+                                                   command=self.yview)
+            self.vscroll.grid(row=0, column=1, sticky="news")
+            super().config(yscrollcommand=self.vscroll.set)
+        if hscroll:
+            self.hscroll = BetterScrollBarHorizontal(self.master_frame,
+                                                     command=self.xview)
+            self.hscroll.grid(row=1, column=0, sticky="news")
+            super().config(xscrollcommand=self.hscroll.set)
+
+    def pack(self, **kwargs) -> None:
+        self.master_frame.pack(**kwargs)
+
+    def grid(self, **kwargs) -> None:
+        self.master_frame.grid(**kwargs)
+
+    def place(self, **kwargs) -> None:
+        self.master_frame.place(**kwargs)
+
+    def pack_forget(self) -> None:
+        self.master_frame.pack_forget()
+
+    def grid_forget(self) -> None:
+        self.master_frame.grid_forget()
+
+    def place_forget(self) -> None:
+        self.master_frame.place_forget()
+
+
 if __name__ == "__main__":
     from bettertk import BetterTk
     from betterframe import BetterFrame
