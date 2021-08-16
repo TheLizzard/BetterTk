@@ -513,6 +513,10 @@ class BetterTk(tk.Frame):
         # its parent's parent's parent and ... until it finds
         # whether or not the widget clicked on is the title bar.
 
+        # No idea why sometimes `event.widget` is a string.
+        if isinstance(widget, str):
+            return False
+
         while widget != self.root:
             if widget == self.buttons_frame:
                 # Don't allow moving the window when buttons are clicked
@@ -524,6 +528,7 @@ class BetterTk(tk.Frame):
             # And widget.master will throw an error
             if widget is None:
                 return False
+
             widget = widget.master
         return False
 
@@ -601,11 +606,11 @@ class BetterTk(tk.Frame):
     def iconbitmap(self, filename:str=None) -> ImageTk.PhotoImage:
         if filename is None:
             return self._tk_icon
+        self.root.update()
         bg = self.title_label.cget("background")
         if self.icon_label is None:
             self.icon_label = tk.Label(self.title_frame, bg=bg)
             self.icon_label.grid(row=1, column=1, sticky="news")
-        self.root.update_idletasks()
         # The 4 is because of the label's border
         size = self.title_frame.winfo_height() - 4
         img = Image.open(filename).resize((size, size), Image.LANCZOS)
