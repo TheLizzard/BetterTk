@@ -513,7 +513,7 @@ class BetterTk(tk.Frame):
             raise tk.TclError(f"Unknown protocol: \"{protocol}\"")
 
     def check_parent_titlebar(self, event:tk.Event) -> bool:
-        return event.widget in self.buttons_frame
+        return event.widget not in self.buttons
         """
         # Get the widget that was pressed:
         widget = event.widget
