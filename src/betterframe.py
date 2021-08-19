@@ -171,6 +171,40 @@ class BetterFrame(tk.Frame):
         self.grid_forget = self.master_frame.grid_forget
         self.place_forget = self.master_frame.place_forget
 
+    def get_x_offset(self) -> (int, int):
+        """
+        Returns the real x value of the (0, 0) coordinate.
+        """
+        low, high = self.dummy_canvas.xview()
+        x1, _, x2, _ = self.dummy_canvas.cget("scrollregion").split(" ")
+        x1, x2 = int(x1), int(x2)
+        low = int(x1 + (x2 - x1)*float(low))
+        high = int(x1 + (x2 - x1)*float(high))
+        return low, high
+
+    def get_y_offset(self) -> (int, int):
+        """
+        Returns the real y value of the (0, 0) coordinate.
+        """
+        low, high = self.dummy_canvas.yview()
+        _, y1, _, y2 = self.dummy_canvas.cget("scrollregion").split(" ")
+        y1, y2 = int(y1), int(y2)
+        low = int(y1 + (y2 - y1)*float(low))
+        high = int(y1 + (y2 - y1)*float(high))
+        return low, high
+
+    def framex(self, x:int) -> int:
+        """
+        Same as `tk.Canvas.canvasx(x)` but for this frame.
+        """
+        return x + self.get_x_offset()[0]
+
+    def framey(self, y:int) -> int:
+        """
+        Same as `tk.Canvas.canvasy(y)` but for this frame.
+        """
+        return y + self.get_y_offset()[0]
+
     def scrolling_windows(self, event:tk.Event) -> None:
         assert event.delta != 0, "On Windows, `event.delta` should never be 0"
         y_steps = int(-event.delta/abs(event.delta)*self.scroll_speed)

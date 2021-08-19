@@ -724,6 +724,9 @@ class BetterTk(tk.Frame):
     def state(self, *args, **kwargs):
         return self.root.state(*args, **kwargs)
 
+    def grab_set(self, *args, **kwargs):
+        return self.root.grab_set(*args, **kwargs)
+
     def report_callback_exception(self, *args, **kwargs):
         return self.root.report_callback_exception(*args, **kwargs)
 
