@@ -374,26 +374,34 @@ class BetterTk(tk.Frame):
         # Needs to packed after `self.title_bar`.
         super().pack(expand=True, side="bottom", fill="both")
 
-        # Add a separator
+        # Separator
         self.separator = tk.Frame(self.master_frame, bd=0, cursor="arrow",
                                   bg=self.settings.SEP_COLOUR,
                                   height=self.settings.SEPARATOR_SIZE)
         self.separator.pack(fill="x")
 
-        # For the titlebar frame
+        # Titlebar frame
         self.title_frame = tk.Frame(self.title_bar, bd=0)
         self.title_frame.pack(expand=True, side="left", anchor="w", padx=5)
 
+        # Buttons frame
         self.buttons_frame = tk.Frame(self.title_bar, bd=0)
         self.buttons_frame.pack(expand=True, side="right", anchor="e")
 
+        # Icon
+        self._tk_icon = None
+        self.icon_label = tk.Label(self.title_frame,
+                                   bg=self.settings.ACTIVE_TITLEBAR_BG)
+        self.icon_label.grid(row=1, column=1, sticky="news")
+
+        # Title text
         self.title_label = tk.Label(self.title_frame, text="",
                                     bg=self.settings.ACTIVE_TITLEBAR_BG,
                                     fg=self.settings.ACTIVE_TITLEBAR_FG)
         self.title("Better Tk")
         self.title_label.grid(row=1, column=2, sticky="news")
-        self.icon_label = None
 
+        # Buttons
         self.minimise_button = MinimiseButton(self.buttons_frame, self,
                                               self.settings)
         self.fullscreen_button = FullScreenButton(self.buttons_frame, self,
@@ -487,10 +495,8 @@ class BetterTk(tk.Frame):
         """
         Changes the titlebar's background colour.
         """
-        items = (self.title_bar, self.buttons_frame, self.title_label)
-        items += tuple(self.buttons)
-        if self.icon_label is not None:
-            items += (self.icon_label, )
+        items = (self.title_bar, self.buttons_frame, self.title_label,
+                 self.icon_label) + tuple(self.buttons)
         for item in items:
             item.config(background=colour)
 
@@ -617,10 +623,6 @@ class BetterTk(tk.Frame):
         if filename is None:
             return self._tk_icon
         self.root.update()
-        bg = self.title_label.cget("background")
-        if self.icon_label is None:
-            self.icon_label = tk.Label(self.title_frame, bg=bg)
-            self.icon_label.grid(row=1, column=1, sticky="news")
         # The 4 is because of the label's border
         size = self.title_frame.winfo_height() - 4
         img = Image.open(filename).resize((size, size), Image.LANCZOS)
