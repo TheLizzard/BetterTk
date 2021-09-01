@@ -374,14 +374,15 @@ class BetterTk(tk.Frame):
             show(column) => None
             hide() => None
     """
-    def __init__(self, master=None, settings:BetterTkSettings=DEFAULT_SETTINGS):
+    def __init__(self, master=None, settings:BetterTkSettings=DEFAULT_SETTINGS,
+                 **kwargs):
         self.settings = settings
         self.settings.started_using()
 
         if master is None:
-            self.root = tk.Tk()
+            self.root = tk.Tk(**kwargs)
         elif isinstance(master, tk.Misc):
-            self.root = tk.Toplevel(master)
+            self.root = tk.Toplevel(master, **kwargs)
         else:
             raise ValueError("Invalid `master` argument. It must be " \
                              "`None` or a class that inherits from `tk.Misc`")

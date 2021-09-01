@@ -35,11 +35,11 @@ WS_EX_TOOLWINDOW = 0x00000080
 
 
 class NoTitlebarTk:
-    def __init__(self, master=None):
+    def __init__(self, master=None, **kwargs):
         if master is None:
-            self.root = tk.Tk()
+            self.root = tk.Tk(**kwargs)
         elif isinstance(master, tk.Misc):
-            self.root = tk.Toplevel(master)
+            self.root = tk.Toplevel(master, **kwargs)
         else:
             raise ValueError("Invalid `master` argument. It must be " \
                              "`None` or a tkinter widget")

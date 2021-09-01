@@ -340,11 +340,12 @@ class BetterTk(tk.Frame):
             show(column) => None
             hide() => None
     """
-    def __init__(self, master=None, settings:BetterTkSettings=DEFAULT_SETTINGS):
+    def __init__(self, master=None, settings:BetterTkSettings=DEFAULT_SETTINGS,
+                 **kwargs):
         self.settings = settings
         self.settings.started_using()
 
-        self.root = NoTitlebarTk(master)
+        self.root = NoTitlebarTk(master, **kwargs)
         self.protocols = {"WM_DELETE_WINDOW": self.destroy}
         self.window_destroyed = False
         self.geometry_bindings = []
@@ -619,7 +620,7 @@ class BetterTk(tk.Frame):
             self.window_destroyed = True
             self.root.destroy()
 
-    def iconbitmap(self, filename:str=None) -> ImageTk.PhotoImage:
+    def _change_icon(self, filename:str) -> ImageTk.PhotoImage:
         if filename is None:
             return self._tk_icon
         self.root.update()
@@ -628,6 +629,14 @@ class BetterTk(tk.Frame):
         img = Image.open(filename).resize((size, size), Image.LANCZOS)
         self._tk_icon = ImageTk.PhotoImage(img, master=self.root)
         self.icon_label.config(image=self._tk_icon)
+
+    def iconbitmap(self, filename:str=None) -> ImageTk.PhotoImage:
+        self._change_icon(filename)
+        self.root.iconbitmap(self._tk_icon)
+
+    def iconphoto(self, default:bool, filename:str) -> None:
+        self._change_icon(filename)
+        self.root.iconphoto(default, self._tk_icon)
 
     def resizable(self, width:int=None, height:int=None) -> (bool, bool):
         if width is not None:
