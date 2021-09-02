@@ -32,7 +32,7 @@ class BetterTkSettings:
             self.HIGHLIGHT = "grey"
             self.ACTIVE_TITLEBAR_BG = "black"
             self.ACTIVE_TITLEBAR_FG = "white"
-            self.INACTIVE_TITLEBAR_BG = "grey17"
+            self.INACTIVE_TITLEBAR_BG = "grey20"
             self.INACTIVE_TITLEBAR_FG = "white"
         elif theme == "light":
             self.BG = "#f0f0ed"
@@ -122,12 +122,12 @@ class CustomButton(tk.Button):
                          command=lambda: self.callback())
         self.column = column
 
-        active_bg = self.betterroot.settings.ACTIVE_TITLEBAR_BG
-        active_fg = self.betterroot.settings.ACTIVE_TITLEBAR_FG
+        # active_bg = self.betterroot.settings.ACTIVE_TITLEBAR_BG
+        # active_fg = self.betterroot.settings.ACTIVE_TITLEBAR_FG
         inactive_bg = self.betterroot.settings.INACTIVE_TITLEBAR_BG
         inactive_fg = self.betterroot.settings.INACTIVE_TITLEBAR_FG
-        super().config(bg=inactive_bg, activebackground=active_bg,
-                       fg=inactive_fg, activeforeground=active_fg)
+        super().config(bg=inactive_bg, activebackground=inactive_bg,
+                       fg=inactive_fg, activeforeground=inactive_fg)
         self.show()
 
     def show(self, column=None):
@@ -418,8 +418,8 @@ class BetterTk(tk.Frame):
         self.buttons = [self.minimise_button, self.fullscreen_button,
                         self.close_button]
 
-        bg = self.settings.ACTIVE_TITLEBAR_BG
-        fg = self.settings.ACTIVE_TITLEBAR_FG
+        bg = self.settings.INACTIVE_TITLEBAR_BG
+        fg = self.settings.INACTIVE_TITLEBAR_FG
         for button in self.buttons:
             button.config(activebackground=bg, activeforeground=fg)
 
@@ -604,8 +604,9 @@ class BetterTk(tk.Frame):
 
     def geometry(self, geometry:str=None) -> str:
         result = self.root.geometry(geometry)
-        for function in self.geometry_bindings:
-            function(geometry)
+        if geometry is not None:
+            for function in self.geometry_bindings:
+                function(geometry)
         return result
 
     def focus_force(self) -> None:
@@ -632,11 +633,11 @@ class BetterTk(tk.Frame):
 
     def iconbitmap(self, filename:str=None) -> ImageTk.PhotoImage:
         self._change_icon(filename)
-        self.root.iconbitmap(self._tk_icon)
+        self.root.iconbitmap(filename)
 
     def iconphoto(self, default:bool, filename:str) -> None:
         self._change_icon(filename)
-        self.root.iconphoto(default, self._tk_icon)
+        self.root.iconphoto(default, filename)
 
     def resizable(self, width:int=None, height:int=None) -> (bool, bool):
         if width is not None:
