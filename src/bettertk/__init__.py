@@ -220,7 +220,7 @@ class FullScreenButton(tk.Button):
                 self.betterroot.resizable_window.resizable_horizontal):
             return "can't"
         super().config(command=self.notfullscreen)
-        self.betterroot.root.fullscreen()
+        self.betterroot.fullscreen()
 
     def notfullscreen(self) -> None:
         """
@@ -230,7 +230,7 @@ class FullScreenButton(tk.Button):
             return "error"
         # This toggles between the `fullscreen` and `notfullscreen` methods
         super().config(command=self.fullscreen)
-        self.betterroot.root.notfullscreen()
+        self.betterroot.notfullscreen()
 
     def show(self, column:int=NUMBER_OF_CUSTOM_BUTTONS+3) -> None:
         """
@@ -364,7 +364,6 @@ class BetterTk(tk.Frame):
 
         self.root = NoTitlebarTk(master, **kwargs)
         self.protocols = {"WM_DELETE_WINDOW": self.destroy}
-        self.window_destroyed = False
         self.geometry_bindings = []
 
         self.root.protocol("WM_DELETE_WINDOW", self.generate_destroy)
@@ -447,6 +446,15 @@ class BetterTk(tk.Frame):
             self.window_focused()
         self.root.bind("<FocusIn>", self.window_focused, add=True)
         self.root.bind("<FocusOut>", self.window_unfocused, add=True)
+
+    def fullscreen(self) -> None:
+        self.root.fullscreen()
+
+    def toggle_fullscreen(self) -> None:
+        self.root.toggle_fullscreen()
+
+    def notfullscreen(self) -> None:
+        self.root.notfullscreen()
 
     def generate_destroy(self) -> None:
         self.protocol_generate("WM_DELETE_WINDOW")
@@ -597,6 +605,7 @@ class BetterTk(tk.Frame):
         self.attributes("-topmost", True)
 
     def geometry(self, geometry:str=None) -> str:
+        self.root.update() # Sometimes it might be needed
         result = self.root.geometry(geometry)
         if geometry is not None:
             for function in self.geometry_bindings:
@@ -609,11 +618,10 @@ class BetterTk(tk.Frame):
 
     def destroy(self) -> None:
         self.settings.stoped_using()
-        if self.window_destroyed:
-            super().destroy()
-        else:
-            self.window_destroyed = True
-            self.root.destroy()
+        # Some trickery:
+        self.master.children.pop(self._name)
+        self.root.destroy()
+        tk.Misc.destroy(self)
 
     def _change_icon(self, filename:str) -> ImageTk.PhotoImage:
         if filename is None:
@@ -627,11 +635,12 @@ class BetterTk(tk.Frame):
 
     def iconbitmap(self, filename:str=None) -> ImageTk.PhotoImage:
         self._change_icon(filename)
-        self.root.iconbitmap(filename)
+        self.root.iconbitmap(filename) # I recommend `.iconphoto` instead
 
     def iconphoto(self, default:bool, filename:str) -> None:
         self._change_icon(filename)
-        self.root.iconphoto(default, filename)
+        self._tk_icon_2 = ImageTk.PhotoImage(master=self, file=filename)
+        self.root.iconphoto(default, self._tk_icon_2)
 
     def resizable(self, width:int=None, height:int=None) -> (bool, bool):
         if width is not None:
