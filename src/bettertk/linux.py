@@ -218,10 +218,8 @@ class FullScreenButton(tk.Button):
             return "can't"
         super().config(command=self.notfullscreen)
         self.betterroot.show_titlebar()
-        super().update()
-        self.betterroot.root.attributes("-fullscreen", True)
-        super().update()
-        self.betterroot.hide_titlebar()
+        super().after(100, self.betterroot.root.attributes, "-fullscreen", True)
+        super().after(200, self.betterroot.hide_titlebar)
         self.betterroot.is_full_screen = True
 
         geometry = f"{self.betterroot.root.winfo_width()}x"\
@@ -390,7 +388,7 @@ class BetterTk(tk.Frame):
         # Create the dummy window
         self.dummy_root = tk.Toplevel(self.root)
         self.dummy_root.bind("<FocusIn>", self.focus_main)
-        self.dummy_root.protocol("WM_DELETE_WINDOW", lambda: self.protocol_generate("WM_DELETE_WINDOW"))
+        self.dummy_root.protocol("WM_DELETE_WINDOW", self.generate_destroy)
         self.root.update()
         geometry = "+%i+%i" % (self.root.winfo_x(), self.root.winfo_y())
         self.hide_titlebar()
@@ -399,8 +397,8 @@ class BetterTk(tk.Frame):
 
         bd = self.settings.BORDER_WIDTH
         # Master frame so that I can add a grey border around the window
-        self.master_frame = tk.Frame(self.root, bd=0, highlightthickness=bd,
-                                     highlightbackground=self.settings.HIGHLIGHT)
+        self.master_frame = tk.Frame(self.root, bd=0, highlightthickness=0,
+                                     bg=self.settings.HIGHLIGHT)
         self.master_frame.pack(expand=True, fill="both")
         self.resizable_window = ResizableWindow(self.master_frame, self)
 
@@ -410,11 +408,12 @@ class BetterTk(tk.Frame):
 
         # Set up the title bar frame
         self.title_bar = tk.Frame(self.master_frame, bd=0, cursor="arrow")
-        self.title_bar.pack(side="top", fill="x")
+        self.title_bar.pack(side="top", fill="x", padx=bd, pady=(bd, 0))
         self.draggable_window = DraggableWindow(self.title_bar, self)
 
         # Needs to packed after `self.title_bar`.
-        super().pack(expand=True, side="bottom", fill="both")
+        super().pack(expand=True, side="bottom", fill="both", padx=bd,
+                     pady=(0, bd))
 
         # Separator
         self.separator = tk.Frame(self.master_frame, bd=0, cursor="arrow",
@@ -470,6 +469,9 @@ class BetterTk(tk.Frame):
             self.window_focused()
         self.root.bind("<FocusIn>", self.window_focused, add=True)
         self.root.bind("<FocusOut>", self.window_unfocused, add=True)
+
+    def generate_destroy(self) -> None:
+        self.protocol_generate("WM_DELETE_WINDOW")
 
     def hide_titlebar(self) -> None:
         self.root.attributes("-type", "splash")
@@ -657,7 +659,7 @@ class BetterTk(tk.Frame):
             _, posx, posy = geometry.split("+")
             dummy_geometry = "+%i+%i" % (int(posx) + 75, int(posy) + 20)
         self.root.geometry(geometry)
-        self.dummy_root.geometry("1x1"+dummy_geometry)
+        self.dummy_root.geometry("10x10"+dummy_geometry)
         for function in self.geometry_bindings:
             function(geometry)
         self.root.update()

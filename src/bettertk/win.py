@@ -350,7 +350,7 @@ class BetterTk(tk.Frame):
         self.window_destroyed = False
         self.geometry_bindings = []
 
-        self.root.protocol("WM_DELETE_WINDOW", lambda: self.protocol_generate("WM_DELETE_WINDOW"))
+        self.root.protocol("WM_DELETE_WINDOW", self.generate_destroy)
         self.root.update()
         geometry = "+%i+%i" % (self.root.winfo_x(), self.root.winfo_y())
         self.geometry(geometry)
@@ -358,8 +358,8 @@ class BetterTk(tk.Frame):
 
         bd = self.settings.BORDER_WIDTH
         # Master frame so that I can add a grey border around the window
-        self.master_frame = tk.Frame(self.root, bd=0, highlightthickness=bd,
-                                     highlightbackground=self.settings.HIGHLIGHT)
+        self.master_frame = tk.Frame(self.root, bd=0, highlightthickness=0,
+                                     bg=self.settings.HIGHLIGHT)
         self.master_frame.pack(expand=True, fill="both")
         self.resizable_window = ResizableWindow(self.master_frame, self)
 
@@ -369,11 +369,12 @@ class BetterTk(tk.Frame):
 
         # Set up the title bar frame
         self.title_bar = tk.Frame(self.master_frame, bd=0, cursor="arrow")
-        self.title_bar.pack(side="top", fill="x")
+        self.title_bar.pack(side="top", fill="x", padx=bd, pady=(bd, 0))
         self.draggable_window = DraggableWindow(self.title_bar, self)
 
         # Needs to packed after `self.title_bar`.
-        super().pack(expand=True, side="bottom", fill="both")
+        super().pack(expand=True, side="bottom", fill="both", padx=bd,
+                     pady=(0, bd))
 
         # Separator
         self.separator = tk.Frame(self.master_frame, bd=0, cursor="arrow",
@@ -429,6 +430,9 @@ class BetterTk(tk.Frame):
             self.window_focused()
         self.root.bind("<FocusIn>", self.window_focused, add=True)
         self.root.bind("<FocusOut>", self.window_unfocused, add=True)
+
+    def generate_destroy(self) -> None:
+        self.protocol_generate("WM_DELETE_WINDOW")
 
     def bind_titlebar(self, sequence:str=None, func=None, add:bool=None):
         to_bind = [self.title_bar]
