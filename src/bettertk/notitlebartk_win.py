@@ -1,12 +1,10 @@
-# Mostly taken from: https://stackoverflow.com/a/30819099/11106801
-import ctypes
-import tkinter as tk
-from time import sleep
+# Partially taken from: https://stackoverflow.com/a/2400467/11106801
 from ctypes.wintypes import BOOL, HWND, LONG
+import tkinter as tk
+import ctypes
 
 # Defining types
 INT = ctypes.c_int
-UINT = ctypes.c_uint
 LONG_PTR = ctypes.c_long
 
 def _errcheck_not_zero(value, func, args):
@@ -15,11 +13,6 @@ def _errcheck_not_zero(value, func, args):
     return args
 
 # Defining functions
-GetParent = ctypes.windll.user32.GetParent
-GetParent.argtypes = (HWND, )
-GetParent.restype = HWND
-GetParent.errcheck = _errcheck_not_zero
-
 GetWindowLongPtrW = ctypes.windll.user32.GetWindowLongPtrW
 GetWindowLongPtrW.argtypes = (HWND, INT)
 GetWindowLongPtrW.restype = LONG_PTR
@@ -30,10 +23,17 @@ SetWindowLongPtrW.argtypes = (HWND, INT, LONG_PTR)
 SetWindowLongPtrW.restype = LONG_PTR
 SetWindowLongPtrW.errcheck = _errcheck_not_zero
 
+def get_handle(root:tk.Tk) -> int:
+    root.update_idletasks()
+    # This gets the window's parent same as `ctypes.windll.user32.GetParent`
+    return GetWindowLongPtrW(root.winfo_id(), GWLP_HWNDPARENT)
+
+
 # Constants
-GWL_EXSTYLE = -20
-WS_EX_APPWINDOW = 0x00040000
-WS_EX_TOOLWINDOW = 0x00000080
+GWL_STYLE = -16
+GWLP_HWNDPARENT = -8
+WS_CAPTION = 0x00C00000
+WS_THICKFRAME = 0x00040000
 
 
 class NoTitlebarTk:
@@ -46,39 +46,20 @@ class NoTitlebarTk:
             raise ValueError("Invalid `master` argument. It must be " \
                              "`None` or a tkinter widget")
 
-        self.locked:bool = False
         self._fullscreen:bool = False
-        self.map_binding:str = self.root.bind("<Map>", self._overrideredirect)
 
         for method_name in dir(self.root):
             method = getattr(self.root, method_name)
             if (method_name not in dir(self)) and (method_name[-2:] != "__"):
                 setattr(self, method_name, method)
 
-    def _overrideredirect(self, event:tk.Event=None) -> None:
-        if self.locked:
-            return None
-        self.locked:bool = True
-        if self.map_binding is not None:
-            self.root.unbind("<Map>", self.map_binding)
-            self.map_binding:str = None
-        self.root.overrideredirect(True)
-        self.root.update_idletasks()
-        self.hwnd:int = GetParent(self.root.winfo_id())
-        style:int = GetWindowLongPtrW(self.hwnd, GWL_EXSTYLE)
-        style:int = (style & ~WS_EX_TOOLWINDOW) | WS_EX_APPWINDOW
-        SetWindowLongPtrW(self.hwnd, GWL_EXSTYLE, style)
+        self._overrideredirect()
 
-        # re-assert the new window style
-        self.root.withdraw()
-        self.root.after(10, self.root.deiconify)
-        # self.root.after(20, self.root.focus_force) # Might be useless
-
-        # Apply the `.after` changes:
-        sleep(0.1)
-        self.root.update()
-
-        self.locked:bool = False
+    def _overrideredirect(self) -> None:
+        hwnd:int = get_handle(self.root)
+        style:int = GetWindowLongPtrW(hwnd, GWL_STYLE)
+        style &= ~(WS_CAPTION | WS_THICKFRAME)
+        SetWindowLongPtrW(hwnd, GWL_STYLE, style)
 
     def overrideredirect(self, boolean:bool=None) -> None:
         raise RuntimeError("This window must stay as `overrideredirect`")
@@ -89,23 +70,16 @@ class NoTitlebarTk:
             value = args[1]
             if isinstance(value, str):
                 value = value.lower() in ("1", "true")
-            if bool(value):
+            if value:
                 return self.fullscreen()
             return self.notfullscreen()
         return self.root.attributes(*args)
     wm_attributes = attributes
 
-    def iconify(self) -> None:
-        self.root.overrideredirect(False)
-        self.root.iconify()
-        self.root.update()
-        self.map_binding:str = self.root.bind("<Map>", self._overrideredirect)
-
     def fullscreen(self) -> None:
         if self._fullscreen:
             return None
         self._fullscreen:bool = True
-        self.root.overrideredirect(False)
         self.root.attributes("-fullscreen", True)
 
     def notfullscreen(self) -> None:
@@ -114,7 +88,6 @@ class NoTitlebarTk:
         self._fullscreen:bool = False
         self.root.attributes("-fullscreen", False)
         self._overrideredirect()
-        self.map_binding:str = self.root.bind("<Map>", self._overrideredirect)
 
     def toggle_fullscreen(self) -> None:
         if self._fullscreen:
