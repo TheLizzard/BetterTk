@@ -255,17 +255,10 @@ class CloseButton(tk.Button):
         else:
             text = "X"
         super().__init__(master, text=text, relief="flat", takefocus=False,
-                         command=self.close_window_protocol)
+                         command=self.betterroot.generate_destroy)
         if not USING_WINDOWS:
             super().config(bd=0, highlightthickness=0)
         self.show()
-
-    def close_window_protocol(self) -> None:
-        """
-        Generates a `WM_DELETE_WINDOW` protocol request.
-        If unhandled it will automatically go to `root.destroy()`
-        """
-        self.betterroot.protocol_generate("WM_DELETE_WINDOW")
 
     def show(self, column:int=NUMBER_OF_CUSTOM_BUTTONS+4) -> None:
         """
@@ -364,8 +357,6 @@ class BetterTk(tk.Frame):
 
         self.root = NoTitlebarTk(master, **kwargs)
         self.protocols = {"WM_DELETE_WINDOW": self.destroy}
-        self.geometry_bindings = []
-
         self.root.protocol("WM_DELETE_WINDOW", self.generate_destroy)
         self.root.update()
         geometry = "+%i+%i" % (self.root.winfo_x(), self.root.winfo_y())
@@ -459,30 +450,31 @@ class BetterTk(tk.Frame):
     def generate_destroy(self) -> None:
         self.protocol_generate("WM_DELETE_WINDOW")
 
+    def protocol(self, protocol:str=None, function=None):
+        """
+        Binds a function to a protocol.
+        """
+        if protocol is None:
+            return tuple(self.protocols.keys())
+        if function is None:
+            return self.protocols[protocol]
+        self.protocols.update({protocol: function})
+
+    def protocol_generate(self, protocol:str) -> None:
+        """
+        Generates a protocol.
+        """
+        try:
+            self.protocols[protocol]()
+        except KeyError:
+            raise tk.TclError(f"Unknown protocol: \"{protocol}\"")
+
     def bind_titlebar(self, sequence:str=None, func=None, add:bool=None):
         to_bind = [self.title_bar]
         while len(to_bind) > 0:
             widget = to_bind.pop()
             widget.bind(sequence, func, add=add)
             to_bind.extend(widget.winfo_children())
-
-    def fullscreen(self) -> None:
-        self.root.fullscreen()
-        geometry = self.root.geometry()
-        for function in self.geometry_bindings:
-            function(geometry)
-
-    def notfullscreen(self) -> None:
-        self.root.notfullscreen()
-        geometry = self.root.geometry()
-        for function in self.geometry_bindings:
-            function(geometry)
-
-    def toggle_fullscreen(self) -> None:
-        self.root.toggle_fullscreen()
-        geometry = self.root.geometry()
-        for function in self.geometry_bindings:
-            function(geometry)
 
     def snap_to_side(self, event:tk.Event=None) -> None:
         """
@@ -539,15 +531,6 @@ class BetterTk(tk.Frame):
         for item in items:
             item.config(foreground=colour)
 
-    def protocol_generate(self, protocol:str) -> None:
-        """
-        Generates a protocol.
-        """
-        try:
-            self.protocols[protocol]()
-        except KeyError:
-            raise tk.TclError(f"Unknown protocol: \"{protocol}\"")
-
     def check_parent_titlebar(self, event:tk.Event) -> bool:
         return event.widget not in self.buttons
 
@@ -591,26 +574,11 @@ class BetterTk(tk.Frame):
             super().config(bg=bg)
         return self.root.config(**kwargs)
 
-    def protocol(self, protocol:str=None, function=None) -> tuple:
-        """
-        Binds a function to a protocol.
-        """
-        if protocol is None:
-            return tuple(self.protocols.keys())
-        if function is None:
-            return self.protocols[protocol]
-        self.protocols.update({protocol: function})
-
     def topmost(self) -> None:
         self.attributes("-topmost", True)
 
     def geometry(self, geometry:str=None) -> str:
-        self.root.update() # Sometimes it might be needed
-        result = self.root.geometry(geometry)
-        if geometry is not None:
-            for function in self.geometry_bindings:
-                function(geometry)
-        return result
+        return self.root.geometry(geometry)
 
     def focus_force(self) -> None:
         self.root.deiconify()

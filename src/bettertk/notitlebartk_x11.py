@@ -111,7 +111,9 @@ class NoTitlebarTk:
 
         # Change the motif hints of the window
         motif_hints = XInternAtom(display, string_to_c("_MOTIF_WM_HINTS"), False)
-        hints = HINTS(2, 0, 0, 0, 0)
+        hints = HINTS()
+        hints.flags = 2 # Specify that we're changing the window decorations.
+        hints.decorations = False
         XChangeProperty(display, parent, motif_hints, XA_ATOM, 32,
                         PropModeReplace, ctypes.byref(hints), 5)
         # Flush the changes

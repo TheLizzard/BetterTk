@@ -5,6 +5,7 @@ import ctypes
 
 # Defining types
 INT = ctypes.c_int
+UINT = ctypes.c_uint
 LONG_PTR = ctypes.c_long
 
 def _errcheck_not_zero(value, func, args):
@@ -23,6 +24,11 @@ SetWindowLongPtrW.argtypes = (HWND, INT, LONG_PTR)
 SetWindowLongPtrW.restype = LONG_PTR
 SetWindowLongPtrW.errcheck = _errcheck_not_zero
 
+SetWindowPos = ctypes.windll.user32.SetWindowPos
+SetWindowPos.argtypes = (HWND, HWND, INT, INT, INT, INT, UINT)
+SetWindowPos.restype = BOOL
+SetWindowPos.errcheck = _errcheck_not_zero
+
 def get_handle(root:tk.Tk) -> int:
     root.update_idletasks()
     # This gets the window's parent same as `ctypes.windll.user32.GetParent`
@@ -34,6 +40,9 @@ GWL_STYLE = -16
 GWLP_HWNDPARENT = -8
 WS_CAPTION = 0x00C00000
 WS_THICKFRAME = 0x00040000
+SWP_NOSIZE = 0x0001
+SWP_NOMOVE = 0x0002
+SWP_NOZORDER = 0x0004
 
 
 class NoTitlebarTk:
@@ -56,10 +65,10 @@ class NoTitlebarTk:
         self._overrideredirect()
 
     def _overrideredirect(self) -> None:
-        hwnd:int = get_handle(self.root)
-        style:int = GetWindowLongPtrW(hwnd, GWL_STYLE)
+        self.hwnd:int = get_handle(self.root)
+        style:int = GetWindowLongPtrW(self.hwnd, GWL_STYLE)
         style &= ~(WS_CAPTION | WS_THICKFRAME)
-        SetWindowLongPtrW(hwnd, GWL_STYLE, style)
+        SetWindowLongPtrW(self.hwnd, GWL_STYLE, style)
 
     def overrideredirect(self, boolean:bool=None) -> None:
         raise RuntimeError("This window must stay as `overrideredirect`")
@@ -95,10 +104,46 @@ class NoTitlebarTk:
         else:
             self.fullscreen()
 
+    def geometry(self, geometry:str=None) -> str:
+        if geometry is None:
+            return self.root.geometry()
+
+        x = y = width = height = 0
+        flags = SWP_NOZORDER
+        if "+" in geometry:
+            geometry, x, y = geometry.split("+")
+            x, y = int(x), int(y)
+        else:
+            flags |= SWP_NOMOVE
+        if "x" in geometry:
+            width, height = geometry.split("x")
+            width, height = int(width), int(height)
+        else:
+            flags |= SWP_NOSIZE
+        SetWindowPos(self.hwnd, 0, x, y, width, height, flags)
+
+
+class Draggable(NoTitlebarTk):
+    def __init__(self):
+        super().__init__()
+        self._offsetx = 0
+        self._offsety = 0
+        self.bind("<Button-1>" ,self.clickwin)
+        self.bind("<B1-Motion>", self.dragwin)
+
+    def dragwin(self, event):
+        x = self.winfo_pointerx() - self._offsetx
+        y = self.winfo_pointery() - self._offsety
+        self.geometry(f"+{x}+{y}")
+
+    def clickwin(self,event):
+        self._offsetx = self.winfo_pointerx() - self.winfo_rootx()
+        self._offsety = self.winfo_pointery() - self.winfo_rooty()
+
 
 # Example 1
 if __name__ == "__main__":
-    root = NoTitlebarTk()
+    root = Draggable()
     root.title("AppWindow Test")
     root.geometry("100x100")
 
@@ -115,9 +160,9 @@ if __name__ == "__main__":
 
 
 # Example 2
-if __name__ == "__main__":
+if __name__ == "__main__a":
     root = tk.Tk()
-    child = NoTitlebarTk(root) # A toplevel
+    child = Draggable(root) # A toplevel
     child.title("AppWindow Test")
     child.geometry("100x100")
 
