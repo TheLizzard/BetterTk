@@ -81,8 +81,8 @@ class NoTitlebarTk:
             raise ValueError("Invalid `master` argument. It must be " \
                              "`None` or a tkinter widget")
 
-        self.locked:bool = False
         self._fullscreen:bool = False
+        self._maximised:bool = False
 
         for method_name in dir(self.root):
             method = getattr(self.root, method_name)
@@ -92,9 +92,6 @@ class NoTitlebarTk:
         self._overrideredirect()
 
     def _overrideredirect(self) -> None:
-        if self.locked:
-            return None
-        self.locked:bool = True
         # This is needed:
         self.root.update_idletasks()
         # Get the handle of the window
@@ -141,6 +138,7 @@ class NoTitlebarTk:
         if self._fullscreen:
             return None
         self._fullscreen:bool = True
+        self.notmaximised()
         self.root.attributes("-fullscreen", True)
 
     def notfullscreen(self) -> None:
@@ -154,6 +152,25 @@ class NoTitlebarTk:
             self.notfullscreen()
         else:
             self.fullscreen()
+
+    def maximised(self) -> None:
+        if self._maximised:
+            return None
+        self._maximised:bool = True
+        self.notfullscreen()
+        self.root.attributes("-zoomed", True)
+
+    def notmaximised(self) -> None:
+        if not self._maximised:
+            return None
+        self._maximised:bool = False
+        self.root.attributes("-zoomed", False)
+
+    def toggle_maximised(self) -> None:
+        if self._maximised:
+            self.notmaximised()
+        else:
+            self.maximised()
 
 
 # Example 1

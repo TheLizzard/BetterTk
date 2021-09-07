@@ -186,7 +186,7 @@ class MinimiseButton(tk.Button):
         super().grid_forget()
 
 
-class FullScreenButton(tk.Button):
+class MaximiseButton(tk.Button):
     def __init__(self, master, betterroot, settings:BetterTkSettings):
         self.betterroot = betterroot
         if settings.USE_UNICODE:
@@ -194,43 +194,10 @@ class FullScreenButton(tk.Button):
         else:
             text = "[]"
         super().__init__(master, text=text, relief="flat", takefocus=False,
-                         command=self.toggle_fullscreen)
+                         command=self.betterroot.toggle_maximised)
         if not USING_WINDOWS:
             super().config(bd=0, highlightthickness=0)
         self.show()
-
-    def toggle_fullscreen(self, event:tk.Event=None) -> None:
-        """
-        Toggles fullscreen.
-        """
-        # If it is called from double clicking:
-        if event is not None:
-            # Make sure that we didn't double click something else
-            if not self.betterroot.check_parent_titlebar(event):
-                return None
-        self.betterroot.root.toggle_fullscreen()
-
-    def fullscreen(self) -> None:
-        """
-        Switches to full screen.
-        """
-        if self.betterroot.root._fullscreen:
-            return "error"
-        if not (self.betterroot.resizable_window.resizable_vertical and \
-                self.betterroot.resizable_window.resizable_horizontal):
-            return "can't"
-        super().config(command=self.notfullscreen)
-        self.betterroot.fullscreen()
-
-    def notfullscreen(self) -> None:
-        """
-        Switches to back to normal (not full) screen.
-        """
-        if not self.betterroot._fullscreen:
-            return "error"
-        # This toggles between the `fullscreen` and `notfullscreen` methods
-        super().config(command=self.fullscreen)
-        self.betterroot.notfullscreen()
 
     def show(self, column:int=NUMBER_OF_CUSTOM_BUTTONS+3) -> None:
         """
@@ -281,10 +248,10 @@ class BetterTk(tk.Frame):
         disable_north_west_resizing
         *Buttons*
             minimise_button
-            fullscreen_button
+            maximise_button
             close_button
         *List of all buttons*
-            buttons: [minimise_button, fullscreen_button, close_button, ...]
+            buttons: [minimise_button, maximise_button, close_button, ...]
 
     Methods:
         *List of newly defined methods*
@@ -318,10 +285,8 @@ class BetterTk(tk.Frame):
             show(column) => None
             hide() => None
 
-        fullscreen_button:
-            toggle_fullscreen() => None
-            fullscreen() => None
-            notfullscreen() => None
+        maximise_button:
+            toggle_maximised() => None
             show(column) => None
             hide() => None
 
@@ -413,17 +378,17 @@ class BetterTk(tk.Frame):
         # Buttons
         self.minimise_button = MinimiseButton(self.buttons_frame, self,
                                               self.settings)
-        self.fullscreen_button = FullScreenButton(self.buttons_frame, self,
-                                                  self.settings)
+        self.maximise_button = MaximiseButton(self.buttons_frame, self,
+                                              self.settings)
         self.close_button = CloseButton(self.buttons_frame, self, self.settings)
 
         # When the user double clicks on the titlebar
         self.bind_titlebar("<Double-Button-1>",
-                           self.fullscreen_button.toggle_fullscreen)
+                           self.toggle_maximised)
         # When the user middle clicks on the titlebar
         self.bind_titlebar("<Button-2>", self.snap_to_side)
 
-        self.buttons = [self.minimise_button, self.fullscreen_button,
+        self.buttons = [self.minimise_button, self.maximise_button,
                         self.close_button]
 
         bg = self.settings.INACTIVE_TITLEBAR_BG
@@ -441,11 +406,36 @@ class BetterTk(tk.Frame):
     def fullscreen(self) -> None:
         self.root.fullscreen()
 
-    def toggle_fullscreen(self) -> None:
-        self.root.toggle_fullscreen()
-
     def notfullscreen(self) -> None:
         self.root.notfullscreen()
+
+    def toggle_fullscreen(self, event:tk.Event=None) -> None:
+        """
+        Toggles fullscreen.
+        """
+        # If it is called from double clicking:
+        if event is not None:
+            # Make sure that we didn't double click something else
+            if not self.check_parent_titlebar(event):
+                return None
+        self.root.toggle_fullscreen()
+
+    def maximised(self) -> None:
+        self.root.maximised()
+
+    def notmaximised(self) -> None:
+        self.root.notmaximised()
+
+    def toggle_maximised(self, event:tk.Event=None) -> None:
+        """
+        Toggles maximised.
+        """
+        # If it is called from double clicking:
+        if event is not None:
+            # Make sure that we didn't double click something else
+            if not self.check_parent_titlebar(event):
+                return None
+        self.root.toggle_maximised()
 
     def generate_destroy(self) -> None:
         self.protocol_generate("WM_DELETE_WINDOW")
@@ -531,6 +521,14 @@ class BetterTk(tk.Frame):
         for item in items:
             item.config(foreground=colour)
 
+    def bind_root(self, *args, **kwargs) -> str:
+        """
+        Binds the root. Please use only for events that aren't always
+        associated with a widget like: "<KeyPress-f>" or "<Return>".
+        Please don't use for events like "<Button-1>" or "<Enter>" or "Motion"
+        """
+        return self.root.bind(*args, **kwargs)
+
     def check_parent_titlebar(self, event:tk.Event) -> bool:
         return event.widget not in self.buttons
 
@@ -556,8 +554,12 @@ class BetterTk(tk.Frame):
         self.resizable_window.disable_north_west_resizing = value
 
     @property
-    def is_full_screen(self) -> bool:
+    def is_fullscreen(self) -> bool:
         return self.root._fullscreen
+
+    @property
+    def is_maximised(self) -> bool:
+        return self.root._maximised
 
     # Normal <tk.Tk> methods:
     def title(self, title:str=None) -> str:
@@ -622,10 +624,10 @@ class BetterTk(tk.Frame):
 
         if self.resizable_window.resizable_horizontal and \
            self.resizable_window.resizable_vertical:
-            if self.fullscreen_button.shown:
-                self.fullscreen_button.show()
+            if self.maximise_button.shown:
+                self.maximise_button.show()
         else:
-            self.fullscreen_button.grid_forget()
+            self.maximise_button.grid_forget()
         return None
 
     def attributes(self, *args, **kwargs):
@@ -708,7 +710,7 @@ class ResizableWindow:
         self.started_resizing = False
 
     def mouse_press(self, event:tk.Event) -> None:
-        if self.betterroot.is_full_screen:
+        if self.betterroot.is_fullscreen or self.betterroot.is_maximised:
             return None
         # Resizing the window:
         if event.widget == self.frame:
@@ -725,7 +727,7 @@ class ResizableWindow:
 
     # For resizing:
     def change_cursor_resizing(self, event) -> None:
-        if self.betterroot.is_full_screen:
+        if self.betterroot.is_fullscreen or self.betterroot.is_maximised:
             self.frame.config(cursor="arrow")
             return None
         if self.started_resizing:
@@ -851,7 +853,7 @@ class DraggableWindow:
             self.geometry("+%i+%i" % (x, y))
 
     def clickwin(self, event):
-        if self.betterroot.is_full_screen:
+        if self.betterroot.is_fullscreen or self.betterroot.is_maximised:
             return None
         if not self.betterroot.check_parent_titlebar(event):
             return None
@@ -868,6 +870,8 @@ if __name__ == "__main__":
     root.title("Example 1")
     root.geometry("400x400")
 
+    root.bind_root("<KeyPress-f>", lambda event: root.toggle_fullscreen())
+
     # Adding a custom button:
     root.custom_buttons = {"name": "?",
                            "function": lambda: print("\"?\" was pressed"),
@@ -879,7 +883,7 @@ if __name__ == "__main__":
                            "column": 2}
 
     # root.minimise_button.hide()
-    # root.fullscreen_button.hide()
+    # root.maximise_button.hide()
     # root.close_button.hide()
 
     root.mainloop()

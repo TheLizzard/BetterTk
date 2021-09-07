@@ -90,6 +90,7 @@ class NoTitlebarTk:
             return None
         self._fullscreen:bool = True
         self.root.attributes("-fullscreen", True)
+    maximised = fullscreen
 
     def notfullscreen(self) -> None:
         if not self._fullscreen:
@@ -97,12 +98,22 @@ class NoTitlebarTk:
         self._fullscreen:bool = False
         self.root.attributes("-fullscreen", False)
         self._overrideredirect()
+    notmaximised = notfullscreen
 
     def toggle_fullscreen(self) -> None:
         if self._fullscreen:
             self.notfullscreen()
         else:
             self.fullscreen()
+    toggle_maximised = toggle_fullscreen
+
+    @property
+    def _maximised(self) -> bool:
+        """
+        There is no difference between fullscreen and maximised window
+        on Windows as far as I am aware.
+        """
+        return self._fullscreen
 
     def geometry(self, geometry:str=None) -> str:
         if geometry is None:
