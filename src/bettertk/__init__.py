@@ -319,13 +319,11 @@ class BetterTk(tk.Frame):
                  **kwargs):
         self.settings = settings
         self.settings.started_using()
+        self._allow_ctrl_w:bool = True
 
         self.root = NoTitlebarTk(master, **kwargs)
         self.protocols = {"WM_DELETE_WINDOW": self.destroy}
         self.root.protocol("WM_DELETE_WINDOW", self.generate_destroy)
-        self.root.update()
-        geometry = "+%i+%i" % (self.root.winfo_x(), self.root.winfo_y())
-        self.geometry(geometry)
         self.root.minsize(MIN_WIDTH, MIN_HEIGHT)
 
         bd = self.settings.BORDER_WIDTH
@@ -403,6 +401,18 @@ class BetterTk(tk.Frame):
         self.root.bind("<FocusIn>", self.window_focused, add=True)
         self.root.bind("<FocusOut>", self.window_unfocused, add=True)
 
+        # This is actually needed otherwise sometimes the window
+        #    doesn't autoresize to child widgets needing more than
+        #    200 pixels of height. I have no clue why
+        self.root.update() # DON'T TOUCH
+        self.root.geometry("") # DON'T TOUCH
+
+        if master is None:
+            super().bind_all("<Control-w>", self.maybe_destroy)
+            super().bind_all("<Control-W>", self.maybe_destroy)
+
+        super().focus_set()
+
     def fullscreen(self) -> None:
         self.root.fullscreen()
 
@@ -435,7 +445,17 @@ class BetterTk(tk.Frame):
             # Make sure that we didn't double click something else
             if not self.check_parent_titlebar(event):
                 return None
-        self.root.toggle_maximised()
+        if self.resizable_window.resizable_horizontal and \
+           self.resizable_window.resizable_vertical:
+            self.root.toggle_maximised()
+
+    def maybe_destroy(self, event:tk.Event) -> None:
+        widget:tk.Misc = event.widget
+        while (not isinstance(widget, BetterTk)) and (widget.master is not None):
+            widget:tk.Misc = widget.master
+
+        if getattr(widget, "_allow_ctrl_w", False):
+            widget.generate_destroy()
 
     def generate_destroy(self) -> None:
         self.protocol_generate("WM_DELETE_WINDOW")
@@ -496,10 +516,14 @@ class BetterTk(tk.Frame):
         self.geometry(f"+{newx}+{newy}")
 
     def window_focused(self, event:tk.Event=None) -> None:
+        if super().focus_displayof() is None:
+            return None
         self.change_titlebar_bg(self.settings.ACTIVE_TITLEBAR_BG)
         self.change_titlebar_fg(self.settings.ACTIVE_TITLEBAR_FG)
 
     def window_unfocused(self, event:tk.Event=None) -> None:
+        if super().focus_displayof() is not None:
+            return None
         self.change_titlebar_bg(self.settings.INACTIVE_TITLEBAR_BG)
         self.change_titlebar_fg(self.settings.INACTIVE_TITLEBAR_FG)
 
@@ -531,6 +555,14 @@ class BetterTk(tk.Frame):
 
     def check_parent_titlebar(self, event:tk.Event) -> bool:
         return event.widget not in self.buttons
+
+    @property
+    def allow_ctrl_w(self) -> bool:
+        return self._allow_ctrl_w
+
+    @allow_ctrl_w.setter
+    def allow_ctrl_w(self, allowed:bool) -> None:
+        self._allow_ctrl_w:bool = allowed
 
     @property
     def custom_buttons(self) -> [CustomButton, CustomButton, ...]:
@@ -653,9 +685,6 @@ class BetterTk(tk.Frame):
 
     def grab_set(self, *args, **kwargs):
         return self.root.grab_set(*args, **kwargs)
-
-    def report_callback_exception(self, *args, **kwargs):
-        return self.root.report_callback_exception(*args, **kwargs)
 
     # This method has problems. I am looking for a solution but...
     # def bind_all(self, *args, **kwargs):
@@ -865,10 +894,11 @@ class DraggableWindow:
 
 
 # Example 1:
-if __name__ == "__main__":
+if __name__ == "__main__a":
     root = BetterTk()
     root.title("Example 1")
     root.geometry("400x400")
+    root.allow_ctrl_w:bool = True
 
     root.bind_root("<KeyPress-f>", lambda event: root.toggle_fullscreen())
 
@@ -890,7 +920,7 @@ if __name__ == "__main__":
 
 
 # Example 2
-if __name__ == "__main__":
+if __name__ == "__main__a":
     settings = BetterTkSettings(theme="light")
     # use_unicode doesn't work on Linux (because of fonts?)
     settings.config(separator_colour="red", use_unicode=not USING_WINDOWS,
@@ -915,5 +945,58 @@ if __name__ == "__main__":
                                 "window's settings.\nI know it looks bad.",
                      justify="left")
     label.pack(anchor="w")
+
+    root.mainloop()
+
+
+# Test
+if __name__ == "__main__a":
+    for i in range(100):
+        root = BetterTk()
+
+        frame = tk.Frame(root, bg="black", width=500, height=500)
+        frame.pack(fill="both", expand=True)
+
+        for j in range(100):
+            root.update()
+
+        assert frame.winfo_height() == frame.winfo_width() == 500
+        root.destroy()
+
+        print(f"passed {i}th test")
+
+
+# Test
+if __name__ == "__main__a":
+    for i in range(100):
+        root = BetterTk()
+        root.geometry("300x400")
+
+        frame = tk.Frame(root, bg="red", width=50, height=50)
+        frame.pack(fill="both", expand=True)
+
+        for j in range(100):
+            root.update()
+
+        assert "300x400" in root.geometry()
+        root.destroy()
+
+        print(f"passed {i}th test")
+
+
+if __name__ == "__main__":
+    root:BetterTk = BetterTk()
+    root.title("Parent")
+    root.geometry("400x400")
+
+    child:BetterTk = BetterTk(root)
+    child.title("Child")
+    child.geometry("400x400")
+
+    e:tk.Entry = tk.Entry(root)
+    e.pack()
+
+    e:tk.Entry = tk.Entry(child)
+    e.pack()
 
     root.mainloop()

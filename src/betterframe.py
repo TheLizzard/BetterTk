@@ -206,15 +206,22 @@ class BetterFrame(tk.Frame):
         return y + self.get_y_offset()[0]
 
     def scrolling_windows(self, event:tk.Event) -> None:
+        if not self.check_mouse_over_self(event):
+            return None
         assert event.delta != 0, "On Windows, `event.delta` should never be 0"
         y_steps = int(-event.delta/abs(event.delta)*self.scroll_speed)
         self.dummy_canvas.yview_scroll(y_steps, "units")
 
     def scrolling_linux(self, event:tk.Event) -> None:
+        if not self.check_mouse_over_self(event):
+            return None
         y_steps = self.scroll_speed
         if event.num == 4:
             y_steps *= -1
         self.dummy_canvas.yview_scroll(y_steps, "units")
+
+    def check_mouse_over_self(self, event:tk.Event) -> bool:
+        return str(event.widget).startswith(str(self.master_frame))
 
     def scrollbar_scrolling(self, event:tk.Event) -> None:
         region = list(self.dummy_canvas.bbox("all"))
@@ -248,6 +255,12 @@ class BetterFrame(tk.Frame):
             self.dummy_canvas.config(height=super().winfo_height())
     fit = resize
 
+    def bind(self, sequence:str, callback, *args, **kwargs) -> tuple[str]:
+        b1:str = self.master_frame.bind(sequence, callback, *args, **kwargs)
+        b2:str = self.dummy_canvas.bind(sequence, callback, *args, **kwargs)
+        b3:str = super().bind(sequence, callback, *args, **kwargs)
+        return b1, b2, b3
+
 
 # Example 1
 if __name__ == "__main__":
@@ -276,5 +289,12 @@ if __name__ == "__main__":
 
     # Force the frame to resize to fit all of the widgets:
     frame.resize(FIT_WIDTH)
+
+    frame2 = BetterFrame(root, height=200, hscroll=False, vscroll=True)
+    frame2.pack()
+    for i in range(51):
+        label = tk.Label(frame2, text=f"Label numberr {i}")
+        label.pack(anchor="w")
+    frame2.resize(FIT_WIDTH)
 
     root.mainloop()

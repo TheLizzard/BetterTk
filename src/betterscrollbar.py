@@ -124,44 +124,130 @@ class BetterScrollBarHorizontal(tk.Canvas, BaseBetterScrollBar):
             self._set(x)
 
 
-class ScrolledText(tk.Text):
-    def __init__(self, master, vscroll:bool=True, hscroll:bool=False,
-                 bg:str="black", fg:str="white", **kwargs):
-        self.master_frame = tk.Frame(master, highlightthickness=0, bd=0, bg=bg)
-        self.master_frame.grid_rowconfigure(0, weight=1)
-        self.master_frame.grid_columnconfigure(0, weight=1)
-        super().__init__(self.master_frame, bg=bg, fg=fg, **kwargs)
-        super().grid(row=0, column=0, sticky="news")
+class ScrolledText:
+    __slots__ = ("text_widget", "vscroll", "hscroll", "line_numbers")
+
+    def __init__(self, master:tk.Misc, text_widget:tk.Text, vscroll:bool=True,
+                 hscroll:bool=False, lines_numbers:bool=False,
+                 line_numbers_width:int=32):
+        self.assert_assertions(master, text_widget)
+        self.text_widget = text_widget
+        master.grid_rowconfigure(0, weight=1)
+        master.grid_columnconfigure(1, weight=1)
+        self.text_widget.grid(row=0, column=1, sticky="news")
         if vscroll:
-            self.vscroll = BetterScrollBarVertical(self.master_frame,
-                                                   command=self.yview)
-            self.vscroll.grid(row=0, column=1, sticky="news")
-            super().config(yscrollcommand=self.vscroll.set)
+            self.vscroll = BetterScrollBarVertical(master,
+                                                command=self.text_widget.yview)
+            self.vscroll.grid(row=0, column=2, sticky="news")
+            self.text_widget.config(yscrollcommand=self.vscroll.set)
         if hscroll:
-            self.hscroll = BetterScrollBarHorizontal(self.master_frame,
-                                                     command=self.xview)
-            self.hscroll.grid(row=1, column=0, sticky="news")
-            super().config(xscrollcommand=self.hscroll.set)
+            self.hscroll = BetterScrollBarHorizontal(master,
+                                                command=self.text_widget.xview)
+            self.hscroll.grid(row=1, column=1, sticky="news")
+            self.text_widget.config(xscrollcommand=self.hscroll.set)
+            self.text_widget.config(wrap="none")
 
-    def pack(self, **kwargs) -> None:
-        self.master_frame.pack(**kwargs)
+        if lines_numbers:
+            self.line_numbers = LineNumbers(master, width=line_numbers_width)
+            self.line_numbers.grid(row=0, column=0, sticky="ns")
+            self.line_numbers.attach(self)
 
-    def grid(self, **kwargs) -> None:
-        self.master_frame.grid(**kwargs)
-
-    def place(self, **kwargs) -> None:
-        self.master_frame.place(**kwargs)
-
-    def pack_forget(self) -> None:
-        self.master_frame.pack_forget()
-
-    def grid_forget(self) -> None:
-        self.master_frame.grid_forget()
-
-    def place_forget(self) -> None:
-        self.master_frame.place_forget()
+    def assert_assertions(self, master:tk.Misc, text_widget:tk.Text):
+        if text_widget not in master.winfo_children():
+            raise RuntimeError("The text widget should be a child of the " \
+                               "`master`")
+        if len(master.winfo_children()) != 1:
+            raise RuntimeError("The `master` should only have the text " \
+                               "widget inside it.")
 
 
+class LineNumbers(tk.Canvas):
+    def __init__(self, master:tk.Misc, width:int=32, **kwargs):
+        super().__init__(master, bd=0, highlightthickness=0, bg="black",
+                         width=width, **kwargs)
+        self.width:int = width
+        self.text_widget:ScrolledText = None
+        self.last_redrawn:tuple[int] = None
+
+    def attach(self, text_widget:ScrolledText) -> None:
+        if self.text_widget is not None:
+            raise RuntimeError("Can't attach twice.")
+        self.scrolled_text:ScrolledText = text_widget
+        self.text_widget:tk.Text = text_widget.text_widget
+        self.font:str = self.text_widget.cget("font")
+
+        self._yview = self.text_widget.yview
+        self.scrolled_text.vscroll.command = self.yview
+        self.text_widget.config(yscrollcommand=self.vscroll_set)
+        self._insert = self.text_widget.insert
+        self.text_widget.insert = self.insert
+
+        self.fg:str = self.text_widget.cget("fg")
+
+        max_y:int = super().winfo_screenheight()
+        super().config(bg=self.text_widget.cget("bg"))
+        super().create_line((self.width-3, 0, self.width-3, max_y), width=1,
+                            fill=self.fg, tags=("separator", ))
+
+        self.redraw_loop()
+
+    def redraw_loop(self) -> None:
+        try:
+            self.redraw()
+            super().after(100, self.redraw_loop)
+        except tk.TclError:
+            pass
+
+    def insert(self, index:str, text:str, *args:tuple) -> None:
+        result = self._insert(index, text, *args)
+        self.redraw()
+        return result
+
+    def yview(self, *args:tuple) -> None:
+        result = self._yview(*args)
+        self.redraw()
+        return result
+
+    def vscroll_set(self, *args:tuple[str]) -> None:
+        result = self.scrolled_text.vscroll.set(*args)
+        self.redraw()
+        return result
+
+    def redraw(self, event:tk.Event=None) -> None:
+        if self.text_widget is None:
+            pass
+
+        i:str = self.text_widget.index(f"@0,{self.text_widget.winfo_height()}")
+        redraw_state_end:tuple[int] = self.text_widget.dlineinfo(i)
+        i:str = self.text_widget.index("@0,0")
+        redraw_state_start:tuple[int] = self.text_widget.dlineinfo(i)
+        redraw_state:tuple[int] = (redraw_state_start[1], redraw_state_start[3],
+                                   redraw_state_end[1], redraw_state_end[3])
+        if redraw_state == self.last_redrawn:
+            return None
+        else:
+            self.last_redrawn:tuple[int] = redraw_state
+
+        super().delete("lines")
+        while True:
+            dline = self.text_widget.dlineinfo(i)
+            if dline is None:
+                break
+            text:int = super().create_text(self.width-5, dline[1], anchor="nw",
+                                           font=self.font, text=int(float(i)),
+                                           fill=self.fg, tags=("lines", ))
+
+            bounds:tuple[int] = super().bbox(text)
+            super().move(text, bounds[0]-bounds[2], 0)
+
+            i:str = self.text_widget.index(f"{i} +1l")
+
+
+def make_scrolled(master:tk.Misc, text_widget:tk.Text, **kwargs):
+    ScrolledText(master, text_widget, **kwargs)
+
+
+# Example 1
 if __name__ == "__main__":
     from bettertk import BetterTk
     from betterframe import BetterFrame
@@ -170,8 +256,8 @@ if __name__ == "__main__":
     root.title("New")
     # root.resizable(False, False)
 
-    frame = BetterFrame(root, bg="black", height=200, hscroll=True, vscroll=True,
-                        VScrollBarClass=BetterScrollBarVertical,
+    frame = BetterFrame(root, bg="black", height=200, hscroll=True,
+                        VScrollBarClass=BetterScrollBarVertical, vscroll=True,
                         HScrollBarClass=BetterScrollBarHorizontal)
     frame.pack(fill="both", expand=True)
 
@@ -183,3 +269,18 @@ if __name__ == "__main__":
         label.pack(fill="x")
 
     root.mainloop()
+
+# Example 2
+if __name__ == "__main__":
+    from bettertk import BetterTk
+
+    root:BetterTk = BetterTk()
+    root.title("ScrolledLined")
+
+    text:tk.Text = tk.Text(root, bg="black", fg="white", width=80, height=20,
+                           bd=0, highlightthickness=0, insertbackground="white",
+                           wrap="none")
+
+    text.insert("end", "\n".join(" ".join(map(str, range(i+1))) for i in range(100)))
+
+    make_scrolled(root, text, vscroll=True, hscroll=True, lines_numbers=True)

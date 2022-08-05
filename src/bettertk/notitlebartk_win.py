@@ -1,4 +1,5 @@
 # Partially taken from: https://stackoverflow.com/a/2400467/11106801
+from __future__ import annotations
 from ctypes.wintypes import BOOL, HWND, LONG
 import tkinter as tk
 import ctypes
@@ -45,10 +46,22 @@ SWP_NOMOVE = 0x0002
 SWP_NOZORDER = 0x0004
 
 
+_default_root:NoTitlebarTk = None
+
+
 class NoTitlebarTk:
     def __init__(self, master=None, **kwargs):
+        # Figure out the master.
+        global _default_root
         if master is None:
+            if _default_root is None:
+                _default_root = self
+            else:
+                raise NotImplementedError("You can't have 2 `tk.Tk`s right " + \
+                                          "now. I am trying to fix that.")
             self.root = tk.Tk(**kwargs)
+        elif master.lower() in ("auto", "automatic", "last"):
+            self.root = tk.Toplevel(_default_root, **kwargs)
         elif isinstance(master, tk.Misc):
             self.root = tk.Toplevel(master, **kwargs)
         else:
@@ -132,6 +145,12 @@ class NoTitlebarTk:
         else:
             flags |= SWP_NOSIZE
         SetWindowPos(self.hwnd, 0, x, y, width, height, flags)
+
+    def destroy(self) -> None:
+        global _default_root
+        if _default_root == self:
+            _default_root = None
+        self.root.destroy()
 
 
 class Draggable(NoTitlebarTk):

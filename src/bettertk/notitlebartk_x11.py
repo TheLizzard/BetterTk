@@ -1,5 +1,6 @@
 # Mostly taken from: https://www.tonyobryan.com//index.php?article=9
 # Inspired by: https://github.com/EDCD/EDMarketConnector/blob/main/theme.py
+from __future__ import annotations
 import tkinter as tk
 import ctypes
 
@@ -29,8 +30,14 @@ WINDOW = LONG
 WINDOW_PTR = ctypes.POINTER(WINDOW)
 HINTS_PTR = ctypes.POINTER(HINTS)
 
-def _errcheck_not_zero(value, func, args):
+def errcheck_not_zero(value, func, args):
     if value == 0:
+        args_str = ", ".join(map(str, args))
+        raise OSError(f"{func.__name__}({args_str}) => {value}")
+    return args
+
+def errcheck_zero(value, func, args):
+    if value != 0:
         args_str = ", ".join(map(str, args))
         raise OSError(f"{func.__name__}({args_str}) => {value}")
     return args
@@ -48,34 +55,50 @@ XA_ATOM = 4
 XInternAtom = libx11.XInternAtom
 XInternAtom.argtypes = (PTR, CHAR_PTR, BOOL)
 XInternAtom.restype = ATOM
-XInternAtom.errcheck = _errcheck_not_zero
+XInternAtom.errcheck = errcheck_not_zero
 
 XOpenDisplay = libx11.XOpenDisplay
 XOpenDisplay.argtypes = (CHAR_PTR, )
 XOpenDisplay.restype = DISPLAY
-XOpenDisplay.errcheck = _errcheck_not_zero
+XOpenDisplay.errcheck = errcheck_not_zero
 
 XChangeProperty = libx11.XChangeProperty
 XChangeProperty.argtypes = (DISPLAY, WINDOW, ATOM, ATOM, INT, INT, HINTS_PTR, INT)
 XChangeProperty.restype = INT
-XChangeProperty.errcheck = _errcheck_not_zero
+XChangeProperty.errcheck = errcheck_not_zero
 
 XQueryTree = libx11.XQueryTree
 XQueryTree.argtypes = (DISPLAY, WINDOW, WINDOW_PTR, WINDOW_PTR, WINDOW_PTR, UINT_PTR)
 XQueryTree.restype = INT
-XQueryTree.errcheck = _errcheck_not_zero
+XQueryTree.errcheck = errcheck_not_zero
 
 XFlush = libx11.XFlush
 XFlush.argtypes = (DISPLAY, )
 XFlush.restype = INT
-XFlush.errcheck = _errcheck_not_zero
+XFlush.errcheck = errcheck_not_zero
+
+XCloseDisplay = libx11.XCloseDisplay
+XCloseDisplay.argtypes = (DISPLAY, )
+XCloseDisplay.restype = INT
+XCloseDisplay.errcheck = errcheck_zero
+
+
+_default_root:NoTitlebarTk = None
 
 
 class NoTitlebarTk:
     def __init__(self, master=None, **kwargs):
+        # Figure out the master.
+        global _default_root
         if master is None:
+            if _default_root is None:
+                _default_root = self
+            else:
+                master = _default_root
+                #raise NotImplementedError("You can't have 2 `tk.Tk`s right " \ \
+                #                          "now. I am trying to fix that.")
             self.root = tk.Tk(**kwargs)
-        elif isinstance(master, tk.Misc):
+        elif isinstance(master, (tk.Misc, NoTitlebarTk)):
             self.root = tk.Toplevel(master, **kwargs)
         else:
             raise ValueError("Invalid `master` argument. It must be " \
@@ -84,9 +107,12 @@ class NoTitlebarTk:
         self._fullscreen:bool = False
         self._maximised:bool = False
 
+        dir_self:list = dir(self)
         for method_name in dir(self.root):
+            if method_name[-2:] == "__":
+                continue
             method = getattr(self.root, method_name)
-            if (method_name not in dir(self)) and (method_name[-2:] != "__"):
+            if method_name not in dir_self:
                 setattr(self, method_name, method)
 
         self._overrideredirect()
@@ -115,6 +141,7 @@ class NoTitlebarTk:
                         PropModeReplace, ctypes.byref(hints), 5)
         # Flush the changes
         XFlush(display)
+        XCloseDisplay(display)
 
     def overrideredirect(self, boolean:bool=None) -> None:
         raise RuntimeError("This window must stay as `overrideredirect`")
@@ -172,9 +199,15 @@ class NoTitlebarTk:
         else:
             self.maximised()
 
+    def destroy(self) -> None:
+        global _default_root
+        if _default_root == self:
+            _default_root = None
+        self.root.destroy()
+
 
 # Example 1
-if __name__ == "__main__":
+if __name__ == "__main__a":
     root = NoTitlebarTk()
     root.title("AppWindow Test")
     root.geometry("100x100")
@@ -192,22 +225,37 @@ if __name__ == "__main__":
 
 
 # Example 2
-if __name__ == "__main__":
-    root = tk.Tk()
-    child = NoTitlebarTk(root) # A toplevel
-    child.title("AppWindow Test")
-    child.geometry("100x100")
+if __name__ == "__main__a":
+    root = NoTitlebarTk()
+    root.geometry("150x150")
+    child = NoTitlebarTk(root)
+    child.geometry("150x150")
 
-    button = tk.Button(child, text="Exit", command=child.destroy)
-    button.pack(fill="x")
+    tk.Label(child, text="Child").pack(fill="x")
+    tk.Button(child, text="Exit", command=child.destroy).pack(fill="x")
+    tk.Button(child, text="Minimise", command=child.iconify).pack(fill="x")
+    tk.Button(child, text="Fullscreen", command=child.toggle_fullscreen).pack(fill="x")
 
-    button = tk.Button(child, text="Minimise", command=child.iconify)
-    button.pack(fill="x")
-
-    button = tk.Button(child, text="Fullscreen", command=child.toggle_fullscreen)
-    button.pack(fill="x")
+    tk.Label(root, text="Master").pack(fill="x")
+    tk.Button(root, text="Exit", command=root.destroy).pack(fill="x")
+    tk.Button(root, text="Minimise", command=root.iconify).pack(fill="x")
+    tk.Button(root, text="Fullscreen", command=root.toggle_fullscreen).pack(fill="x")
 
     root.mainloop()
+
+
+# Test
+if __name__ == "__main__a":
+    from time import sleep
+    for i in range(1000):
+        root = NoTitlebarTk()
+        root.geometry("10x10+0+0")
+        for j in range(1000):
+            root.update()
+        root.destroy()
+
+        if i % 20 == 0:
+            print(f"Passed {i}th test")
 
 
 """
@@ -230,7 +278,7 @@ XDefaultScreen.restype = SCREEN
 XRootWindow = libx11.XRootWindow
 XRootWindow.argtypes = (DISPLAY, SCREEN)
 XRootWindow.restype = WINDOW
-XRootWindow.errcheck = _errcheck_not_zero
+XRootWindow.errcheck = errcheck_not_zero
 
 XBlackPixel = libx11.XBlackPixel
 XBlackPixel.argtypes = (DISPLAY, SCREEN)
@@ -244,17 +292,17 @@ XCreateSimpleWindow = libx11.XCreateSimpleWindow
 XCreateSimpleWindow.argtypes = (DISPLAY, WINDOW, INT, INT, UINT, UINT, UINT,
                                 ULONG)
 XCreateSimpleWindow.restype = SCREEN
-XCreateSimpleWindow.errcheck = _errcheck_not_zero
+XCreateSimpleWindow.errcheck = errcheck_not_zero
 
 XMapWindow = libx11.XMapWindow
 XMapWindow.argtypes = (DISPLAY, WINDOW)
 XMapWindow.restype = INT
-XMapWindow.errcheck = _errcheck_not_zero
+XMapWindow.errcheck = errcheck_not_zero
 
 XNextEvent = libx11.XNextEvent
 XNextEvent.argtypes = (DISPLAY, EVENT_PTR)
 XNextEvent.restype = INT
-XNextEvent.errcheck = _errcheck_not_zero
+XNextEvent.errcheck = errcheck_not_zero
 
 
 root = tk.Tk()
