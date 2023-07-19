@@ -7,9 +7,10 @@ class BetterEntry(tk.Text):
         super().__init__(master, **{"bg":"black", "fg":"white", "height":1,
                                     "width":20, "insertbackground":"white",
                                     "font":"Sans-Serif 10", **kwargs})
+        super().bind("<KP_Enter>", self.enter_pressed)
+        super().bind("<Return>", self.enter_pressed)
         super().bind("<Control-a>", self.select_all)
         super().bind("<Control-A>", self.select_all)
-        super().bind("<Return>", self.enter_pressed)
         super().bind("<Tab>", self.tab_pressed)
         super().bind("<Control-v>", self.paste)
         super().bind("<Control-V>", self.paste)
@@ -104,5 +105,5 @@ if __name__ == "__main__":
     root:tk.Tk = tk.Tk()
 
     entry:BetterEntry = BetterEntry(root)
-    entry.bind("<Return>", lambda e: print(entry.get()))
+    entry.bind("<Return>", lambda e: print(f"\"{entry.get()}\""))
     entry.pack(fill="both", expand=True)

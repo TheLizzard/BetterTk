@@ -1,19 +1,23 @@
 from PIL import Image, ImageTk
-from sys import platform
 import tkinter as tk
 
-USING_WINDOWS = ("win" in platform)
-if USING_WINDOWS:
-    try:
-        from .notitlebartk_win import NoTitlebarTk
-    except ImportError:
+
+try:
+    from get_os import IS_WINDOWS, IS_UNIX, HAS_X11
+    if IS_WINDOWS:
         from notitlebartk_win import NoTitlebarTk
-else:
-    # Check if X11 is available?
-    try:
-        from .notitlebartk_x11 import NoTitlebarTk
-    except ImportError:
+    elif HAS_X11:
         from notitlebartk_x11 import NoTitlebarTk
+    else:
+        raise NotImplementedError("Not Windows and no libX11.so.6")
+except ImportError:
+    from .get_os import IS_WINDOWS, IS_UNIX, HAS_X11
+    if IS_WINDOWS:
+        from .notitlebartk_win import NoTitlebarTk
+    elif HAS_X11:
+        from .notitlebartk_x11 import NoTitlebarTk
+    else:
+        raise NotImplementedError("Not Windows and no libX11.so.6")
 
 
 THEME_OPTIONS = ("light", "dark")
@@ -129,7 +133,7 @@ class CustomButton(tk.Button):
             self.callback = function
         super().__init__(master, text=name, relief="flat", takefocus=False,
                          command=lambda: self.callback())
-        if not USING_WINDOWS:
+        if HAS_X11:
             super().config(bd=0, highlightthickness=0)
         self.column = column
 
@@ -167,7 +171,7 @@ class MinimiseButton(tk.Button):
             text = "_"
         super().__init__(master, text=text, relief="flat", takefocus=False,
                          command=self.betterroot.root.iconify)
-        if not USING_WINDOWS:
+        if HAS_X11:
             super().config(bd=0, highlightthickness=0)
         self.show()
 
@@ -195,7 +199,7 @@ class MaximiseButton(tk.Button):
             text = "[]"
         super().__init__(master, text=text, relief="flat", takefocus=False,
                          command=self.betterroot.toggle_maximised)
-        if not USING_WINDOWS:
+        if HAS_X11:
             super().config(bd=0, highlightthickness=0)
         self.show()
 
@@ -223,7 +227,7 @@ class CloseButton(tk.Button):
             text = "X"
         super().__init__(master, text=text, relief="flat", takefocus=False,
                          command=self.betterroot.generate_destroy)
-        if not USING_WINDOWS:
+        if HAS_X11:
             super().config(bd=0, highlightthickness=0)
         self.show()
 
@@ -320,6 +324,7 @@ class BetterTk(tk.Frame):
         self.settings = settings
         self.settings.started_using()
         self._allow_ctrl_w:bool = True
+        self._overrideredirect:bool = False
 
         self.root = NoTitlebarTk(master, **kwargs)
         self.protocols = {"WM_DELETE_WINDOW": self.destroy}
@@ -352,13 +357,13 @@ class BetterTk(tk.Frame):
                                   height=self.settings.SEPARATOR_SIZE)
         self.separator.pack(fill="x")
 
-        # Titlebar frame
-        self.title_frame = tk.Frame(self.title_bar, bd=0)
-        self.title_frame.pack(expand=True, side="left", anchor="w", padx=5)
-
         # Buttons frame
         self.buttons_frame = tk.Frame(self.title_bar, bd=0)
         self.buttons_frame.pack(expand=True, side="right", anchor="e")
+
+        # Titlebar frame
+        self.title_frame = tk.Frame(self.title_bar, bd=0)
+        self.title_frame.pack(expand=True, side="left", anchor="w", padx=5)
 
         # Icon
         self._tk_icon = None
@@ -608,8 +613,37 @@ class BetterTk(tk.Frame):
             super().config(bg=bg)
         return self.root.config(**kwargs)
 
-    def topmost(self) -> None:
-        self.attributes("-topmost", True)
+    def topmost(self, value:bool) -> None:
+        self.attributes("-topmost", bool(value))
+
+    def overrideredirect(self, value:bool, *, border:bool=True) -> None:
+        if value:
+            self.turnon_overrideredirect(border=border)
+        else:
+            self.turnoff_overrideredirect()
+
+    def turnon_overrideredirect(self, *, border:bool) -> None:
+        if self._overrideredirect:
+            return None
+        self._overrideredirect:bool = True
+        self.separator.pack_forget()
+        self.title_bar.pack_forget()
+        if border:
+            bd:int = self.settings.BORDER_WIDTH
+            kwargs:dict = dict(padx=bd, pady=bd)
+        else:
+            kwargs:dict = dict(padx=0, pady=0)
+        super().pack(expand=True, fill="both", **kwargs)
+
+    def turnoff_overrideredirect(self) -> None:
+        if not self._overrideredirect:
+            return None
+        self._overrideredirect:bool = False
+        bd:int = self.settings.BORDER_WIDTH
+        self.title_bar.pack(side="top", fill="x", padx=bd, pady=(bd, 0))
+        self.separator.pack(fill="x")
+        super().pack(expand=True, side="bottom", fill="both", padx=bd,
+                     pady=(0, bd))
 
     def geometry(self, geometry:str=None) -> str:
         return self.root.geometry(geometry)
@@ -622,8 +656,8 @@ class BetterTk(tk.Frame):
         self.settings.stoped_using()
         # Some trickery:
         self.master.children.pop(self._name)
+        super().destroy()
         self.root.destroy()
-        tk.Misc.destroy(self)
 
     def _change_icon(self, filename:str) -> ImageTk.PhotoImage:
         if filename is None:
@@ -767,7 +801,7 @@ class ResizableWindow:
             # Reset the cursor back to "arrow"
             self.frame.config(cursor="arrow")
         elif (quadrant_resizing == "ne") or (quadrant_resizing == "sw"):
-            if USING_WINDOWS:
+            if IS_WINDOWS:
                 # Available on Windows
                 self.frame.config(cursor="size_ne_sw")
             else:
@@ -777,7 +811,7 @@ class ResizableWindow:
                 else:
                     self.frame.config(cursor="top_right_corner")
         elif (quadrant_resizing == "nw") or (quadrant_resizing == "se"):
-            if USING_WINDOWS:
+            if IS_WINDOWS:
                 # Available on Windows
                 self.frame.config(cursor="size_nw_se")
             else:
@@ -923,7 +957,7 @@ if __name__ == "__main__a":
 if __name__ == "__main__a":
     settings = BetterTkSettings(theme="light")
     # use_unicode doesn't work on Linux (because of fonts?)
-    settings.config(separator_colour="red", use_unicode=not USING_WINDOWS,
+    settings.config(separator_colour="red", use_unicode=HAS_X11,
                     active_titlebar_bg="#00ff00",
                     inactive_titlebar_bg="#009900",
                     active_titlebar_fg="white",
@@ -982,21 +1016,3 @@ if __name__ == "__main__a":
         root.destroy()
 
         print(f"passed {i}th test")
-
-
-if __name__ == "__main__":
-    root:BetterTk = BetterTk()
-    root.title("Parent")
-    root.geometry("400x400")
-
-    child:BetterTk = BetterTk(root)
-    child.title("Child")
-    child.geometry("400x400")
-
-    e:tk.Entry = tk.Entry(root)
-    e.pack()
-
-    e:tk.Entry = tk.Entry(child)
-    e.pack()
-
-    root.mainloop()

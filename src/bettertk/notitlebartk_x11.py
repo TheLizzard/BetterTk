@@ -1,6 +1,8 @@
 # Mostly taken from: https://www.tonyobryan.com//index.php?article=9
 # Inspired by: https://github.com/EDCD/EDMarketConnector/blob/main/theme.py
+# TODO?: Implement _NET_WM_STATE_SKIP_TASKBAR
 from __future__ import annotations
+from time import sleep
 import tkinter as tk
 import ctypes
 
@@ -11,24 +13,61 @@ BOOL = ctypes.c_bool
 INT = ctypes.c_int
 UINT = ctypes.c_uint
 LONG = ctypes.c_long
+ULONG = ctypes.c_ulong
 PTR = ctypes.c_void_p
 
 CHAR_PTR = ctypes.POINTER(CHAR)
 UINT_PTR = ctypes.POINTER(UINT)
 ULONG = ctypes.c_ulong
 
+
+VISUAL = UCHAR*56
+DISPLAY = PTR
+ATOM = LONG
+WINDOW = LONG
+SCREEN = INT
+VISUALID = LONG # Not sure?
+COLORMAP = LONG # Not sure?
+CURSOR = LONG   # Not sure?
+PIXMAP = LONG   # Not sure?
+WINDOW_PTR = ctypes.POINTER(WINDOW)
+VISUAL_PTR = ctypes.POINTER(VISUAL)
 class HINTS(ctypes.Structure):
     _fields_ = (("flags", ULONG),
                 ("functions", ULONG),
                 ("decorations", ULONG),
                 ("inputMode", LONG),
                 ("status", ULONG))
-
-DISPLAY = PTR
-ATOM = LONG
-WINDOW = LONG
-WINDOW_PTR = ctypes.POINTER(WINDOW)
 HINTS_PTR = ctypes.POINTER(HINTS)
+class XSETWINDOWATTRIBUTES(ctypes.Structure):
+    _fields_ = (("background_pixmap", PIXMAP),
+                ("background_pixel", ULONG),
+                ("border_pixmap", PIXMAP),
+                ("border_pixel", ULONG),
+                ("bit_gravity", INT),
+                ("win_gravity", INT),
+                ("backing_store", INT),
+                ("backing_planes", ULONG),
+                ("backing_pixel", ULONG),
+                ("save_under", BOOL),
+                ("event_mask", LONG),
+                ("do_not_propagate_mask", LONG),
+                ("override_redirect", BOOL),
+                ("colormap", COLORMAP),
+                ("cursor", CURSOR))
+XSETWINDOWATTRIBUTES_PTR = ctypes.POINTER(XSETWINDOWATTRIBUTES)
+class XVISUALINFO(ctypes.Structure):
+    _fields_ = (("visual", VISUAL_PTR),
+                ("visualid", VISUALID),
+                ("screen", INT),
+                ("depth", INT),
+                ("class", INT),
+                ("red_mask", ULONG),
+                ("green_mask", ULONG),
+                ("blue_mask", ULONG),
+                ("colormap_size", INT),
+                ("bits_per_rgb", INT))
+XVISUALINFO_PTR = ctypes.POINTER(XVISUALINFO)
 
 def errcheck_not_zero(value, func, args):
     if value == 0:
@@ -50,6 +89,10 @@ libx11 = ctypes.cdll.LoadLibrary("libX11.so.6")
 # Constants
 PropModeReplace = 0
 XA_ATOM = 4
+
+ALLOCNONE = 0
+TRUECOLOR = 4
+CWCOLORMAP = 8192
 
 # Defining functions
 XInternAtom = libx11.XInternAtom
@@ -82,23 +125,74 @@ XCloseDisplay.argtypes = (DISPLAY, )
 XCloseDisplay.restype = INT
 XCloseDisplay.errcheck = errcheck_zero
 
+XDefaultScreen = libx11.XDefaultScreen
+XDefaultScreen.argtypes = (DISPLAY, )
+XDefaultScreen.restype = SCREEN
 
-_default_root:NoTitlebarTk = None
+XDefaultRootWindow = libx11.XDefaultRootWindow
+XDefaultRootWindow.argtypes = (DISPLAY, )
+XDefaultRootWindow.restype = WINDOW
 
+XChangeWindowAttributes = libx11.XChangeWindowAttributes
+XChangeWindowAttributes.argtypes = (DISPLAY, WINDOW, ULONG, XSETWINDOWATTRIBUTES_PTR)
+XChangeWindowAttributes.restype = INT
+XChangeWindowAttributes.errcheck = errcheck_not_zero
+
+XCreateColormap = libx11.XCreateColormap
+XCreateColormap.argtypes = (DISPLAY, WINDOW, VISUAL_PTR, INT)
+XCreateColormap.restype = COLORMAP
+XCreateColormap.errcheck = errcheck_not_zero
+
+XMatchVisualInfo = libx11.XMatchVisualInfo
+XMatchVisualInfo.argtypes = (DISPLAY, SCREEN, INT, INT, XVISUALINFO_PTR)
+XMatchVisualInfo.restype = BOOL
+XMatchVisualInfo.errcheck = errcheck_not_zero
+
+XMapWindow = libx11.XMapWindow
+XMapWindow.argtypes = (DISPLAY, WINDOW)
+XMapWindow.restype = INT
+XMapWindow.errcheck = errcheck_not_zero
+
+XUnmapWindow = libx11.XUnmapWindow
+XUnmapWindow.argtypes = (DISPLAY, WINDOW)
+XUnmapWindow.restype = INT
+XUnmapWindow.errcheck = errcheck_not_zero
+
+XReparentWindow = libx11.XReparentWindow
+XReparentWindow.argtypes = (DISPLAY, WINDOW, WINDOW, INT, INT)
+XReparentWindow.restype = INT
+XReparentWindow.errcheck = errcheck_not_zero
+
+XSync = libx11.XSync
+XSync.argtypes = (DISPLAY, BOOL)
+XSync.restype = INT
+XSync.errcheck = errcheck_not_zero
+
+XAddToSaveSet = libx11.XAddToSaveSet
+XAddToSaveSet.argtypes = (DISPLAY, WINDOW)
+XAddToSaveSet.restype = INT
+XAddToSaveSet.errcheck = errcheck_not_zero
+
+XClearArea = libx11.XClearArea
+XClearArea.argtypes = (DISPLAY, WINDOW, INT, INT, UINT, UINT, BOOL)
+XClearArea.restype = INT
+XClearArea.errcheck = errcheck_not_zero
+
+
+OPEN_DISPLAY:DISPLAY = None
 
 class NoTitlebarTk:
-    def __init__(self, master=None, **kwargs):
+    def __init__(self, master=None, withdraw:bool=False, **kwargs):
         # Figure out the master.
-        global _default_root
         if master is None:
-            if _default_root is None:
-                _default_root = self
-            else:
-                master = _default_root
-                #raise NotImplementedError("You can't have 2 `tk.Tk`s right " \ \
-                #                          "now. I am trying to fix that.")
+            self.owns_display:bool = True
             self.root = tk.Tk(**kwargs)
         elif isinstance(master, (tk.Misc, NoTitlebarTk)):
+            self.display = self._get_display(master)
+            if self.display is None:
+                self.owns_display:bool = True
+            else:
+                self.owns_display:bool = False
             self.root = tk.Toplevel(master, **kwargs)
         else:
             raise ValueError("Invalid `master` argument. It must be " \
@@ -115,33 +209,104 @@ class NoTitlebarTk:
             if method_name not in dir_self:
                 setattr(self, method_name, method)
 
+        self.setup()
         self._overrideredirect()
 
-    def _overrideredirect(self) -> None:
-        # This is needed:
-        self.root.update_idletasks()
-        # Get the handle of the window
-        handle:int = self.root.winfo_id()
+    def _get_display(self, widget:tk.Misc) -> DISPLAY|None:
+        assert isinstance(widget, tk.Misc|NoTitlebarTk), "TypeError"
+        while True:
+            if widget is None:
+                return None
+            if isinstance(widget, NoTitlebarTk):
+                return widget.display
+            if hasattr(widget, "root"):
+                return widget.root.display
+            widget:tk.Misc = widget.master
 
-        # Get the default display
-        display = XOpenDisplay(None)
+    def setup(self) -> None:
+        global OPEN_DISPLAY
+        if self.owns_display:
+            assert OPEN_DISPLAY is None, "InternalError"
+            # Get the default display
+            self.display:DISPLAY = XOpenDisplay(None)
+            OPEN_DISPLAY = self.display
 
+        self.wait_mapped()
         # Get the parent of the window
-        parent = WINDOW()
-        XQueryTree(display, handle, ctypes.byref(WINDOW()),
-                   ctypes.byref(parent), ctypes.byref(WINDOW()),
-                   ctypes.byref(UINT()))
+        self.window:WINDOW = self._get_parent(self.root.winfo_id())
 
+    def _get_parent(self, winid:int) -> WINDOW:
+        parent:WINDOW = WINDOW()
+        root:WINDOW = WINDOW()
+        children:WINDOW = WINDOW()
+        num_children:UINT = UINT()
+        XQueryTree(self.display, winid, ctypes.byref(root),
+                   ctypes.byref(parent), ctypes.byref(children),
+                   ctypes.byref(num_children))
+        if num_children != 0:
+            # Free children because it is a non-empty array of WINDOWs
+            # WINDOW* children;
+            pass
+        return parent
+
+    def cleanup(self) -> None:
+        global OPEN_DISPLAY
+        if self.owns_display:
+            assert OPEN_DISPLAY == self.display, "InternalError"
+            XCloseDisplay(self.display)
+            OPEN_DISPLAY = None
+
+    def _overrideredirect(self) -> None:
         # Change the motif hints of the window
-        motif_hints = XInternAtom(display, string_to_c("_MOTIF_WM_HINTS"), False)
+        motif_hints = XInternAtom(self.display, string_to_c("_MOTIF_WM_HINTS"),
+                                  False)
         hints = HINTS()
         hints.flags = 2 # Specify that we're changing the window decorations.
         hints.decorations = False
-        XChangeProperty(display, parent, motif_hints, XA_ATOM, 32,
+        XChangeProperty(self.display, self.window, motif_hints, XA_ATOM, 32,
                         PropModeReplace, ctypes.byref(hints), 5)
         # Flush the changes
-        XFlush(display)
-        XCloseDisplay(display)
+        XFlush(self.display)
+
+    def _reparent_window(self, child:WINDOW, parent:WINDOW, x:int, y:int):
+        #raise NotImplementedError("Right now this doesn't handle events " \
+        #                          "or repaints correctly.")
+        XUnmapWindow(self.display, child)
+        XSync(self.display, False)
+        XReparentWindow(self.display, child, parent, x, y)
+        XMapWindow(self.display, child)
+        sleep(0.01)
+        XSync(self.display, False)
+        XAddToSaveSet(self.display, child)
+        XFlush(self.display) # Might be unneeded?
+
+    def wait_mapped(self) -> None:
+        def inner() -> None:
+            if self.root.winfo_ismapped():
+                self.root.quit()
+            else:
+                self.root.after(100, inner)
+        self.after(100, inner)
+        self.mainloop()
+
+    """
+    def transparentcolor(self, colour:str) -> None:
+        vinfo = XVISUALINFO()
+        XMatchVisualInfo(self.display, XDefaultScreen(self.display), 32,
+                         TRUECOLOR, ctypes.byref(vinfo))
+
+        attr = XSETWINDOWATTRIBUTES()
+        attr.colormap = XCreateColormap(self.display,
+                                        XDefaultRootWindow(self.display),
+                                        vinfo.visual, ALLOCNONE)
+        attr.border_pixel = 0
+        attr.background_pixel = 0
+
+        # print(self.display, self.window, CWCOLORMAP, attr)
+        XChangeWindowAttributes(self.display, self.window, CWCOLORMAP,
+                                ctypes.byref(attr))
+        XFlush(self.display)
+    # Please kill me, it doesn't do anything for some reason"""
 
     def overrideredirect(self, boolean:bool=None) -> None:
         raise RuntimeError("This window must stay as `overrideredirect`")
@@ -200,14 +365,35 @@ class NoTitlebarTk:
             self.maximised()
 
     def destroy(self) -> None:
-        global _default_root
-        if _default_root == self:
-            _default_root = None
         self.root.destroy()
+        self.cleanup()
+
+
+class Draggable(NoTitlebarTk):
+    def __init__(self):
+        super().__init__()
+        self.dragging:bool = False
+        self.bind("<Button-1>" ,self.clickwin)
+        self.bind("<B1-Motion>", self.dragwin)
+        self.bind("<ButtonRelease-1>", self.releasewin)
+
+    def dragwin(self, event:tk.Event) -> None:
+        if self.dragging:
+            x:int = self.winfo_pointerx() - self._offsetx
+            y:int = self.winfo_pointery() - self._offsety
+            self.geometry(f"+{x}+{y}")
+
+    def releasewin(self, event:tk.Event) -> None:
+        self.dragging:bool = False
+
+    def clickwin(self, event:tk.Event) -> None:
+        self._offsetx:int = self.winfo_pointerx() - self.winfo_rootx()
+        self._offsety:int = self.winfo_pointery() - self.winfo_rooty()
+        self.dragging:bool = True
 
 
 # Example 1
-if __name__ == "__main__a":
+if __name__ == "__main__":
     root = NoTitlebarTk()
     root.title("AppWindow Test")
     root.geometry("100x100")
@@ -225,7 +411,7 @@ if __name__ == "__main__a":
 
 
 # Example 2
-if __name__ == "__main__a":
+if __name__ == "__main__":
     root = NoTitlebarTk()
     root.geometry("150x150")
     child = NoTitlebarTk(root)
@@ -240,6 +426,14 @@ if __name__ == "__main__a":
     tk.Button(root, text="Exit", command=root.destroy).pack(fill="x")
     tk.Button(root, text="Minimise", command=root.iconify).pack(fill="x")
     tk.Button(root, text="Fullscreen", command=root.toggle_fullscreen).pack(fill="x")
+
+    root.mainloop()
+
+
+# Example 3
+if __name__ == "__main__":
+    root = Draggable()
+    # root.transparentcolor("white")
 
     root.mainloop()
 
@@ -271,10 +465,6 @@ class EVENT(ctypes.Structure):
 EVENT_PTR = ctypes.POINTER(EVENT)
 
 
-XDefaultScreen = libx11.XDefaultScreen
-XDefaultScreen.argtypes = (DISPLAY, )
-XDefaultScreen.restype = SCREEN
-
 XRootWindow = libx11.XRootWindow
 XRootWindow.argtypes = (DISPLAY, SCREEN)
 XRootWindow.restype = WINDOW
@@ -293,11 +483,6 @@ XCreateSimpleWindow.argtypes = (DISPLAY, WINDOW, INT, INT, UINT, UINT, UINT,
                                 ULONG)
 XCreateSimpleWindow.restype = SCREEN
 XCreateSimpleWindow.errcheck = errcheck_not_zero
-
-XMapWindow = libx11.XMapWindow
-XMapWindow.argtypes = (DISPLAY, WINDOW)
-XMapWindow.restype = INT
-XMapWindow.errcheck = errcheck_not_zero
 
 XNextEvent = libx11.XNextEvent
 XNextEvent.argtypes = (DISPLAY, EVENT_PTR)

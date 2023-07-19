@@ -41,11 +41,30 @@ GWL_STYLE = -16
 GWLP_HWNDPARENT = -8
 WS_CAPTION = 0x00C00000
 WS_THICKFRAME = 0x00040000
+
 SWP_NOSIZE = 0x0001
 SWP_NOMOVE = 0x0002
 SWP_NOZORDER = 0x0004
+SWP_NOREDRAW = 0x0008
+SWP_NOACTIVATE = 0x0010
+SWP_DRAWFRAME = 0x0020
+SWP_FRAMECHANGED = 0x0020
+SWP_SHOWWINDOW = 0x0040
+SWP_HIDEWINDOW = 0x0080
+SWP_NOCOPYBITS = 0x0100
+SWP_NOOWNERZORDER = 0x0200
+SWP_NOREPOSITION = 0x0200
+SWP_NOSENDCHANGING = 0x0400
+SWP_DEFERERASE = 0x2000
+SWP_ASYNCWINDOWPOS = 0x4000
+"""
+SWP_NOSIZE = 0x0001
+SWP_NOMOVE = 0x0002
+SWP_NOZORDER = 0x0004
+"""
 
 
+# Only needed for the `NotImplementedError` error.
 _default_root:NoTitlebarTk = None
 
 
@@ -60,9 +79,7 @@ class NoTitlebarTk:
                 raise NotImplementedError("You can't have 2 `tk.Tk`s right " + \
                                           "now. I am trying to fix that.")
             self.root = tk.Tk(**kwargs)
-        elif master.lower() in ("auto", "automatic", "last"):
-            self.root = tk.Toplevel(_default_root, **kwargs)
-        elif isinstance(master, tk.Misc):
+        elif isinstance(master, (tk.Misc, NoTitlebarTk)):
             self.root = tk.Toplevel(master, **kwargs)
         else:
             raise ValueError("Invalid `master` argument. It must be " \
@@ -128,6 +145,19 @@ class NoTitlebarTk:
         """
         return self._fullscreen
 
+    def _move_window_to(self, x:int, y:int) -> None:
+        flags = SWP_NOZORDER | SWP_NOSIZE
+        SetWindowPos(self.hwnd, 0, x, y, 0, 0, flags)
+
+    def _resize_window_to(self, width:int, height:int) -> None:
+        flags = SWP_NOZORDER | SWP_NOMOVE
+        # Tried to stop stuttering when resizing nw
+        # flags |= SWP_NOCOPYBITS | SWP_NOREDRAW
+        SetWindowPos(self.hwnd, 0, 0, 0, width, height, flags)
+
+    def _geometry_window_to(self, *, width:int, height:int, x:int, y:int):
+        SetWindowPos(self.hwnd, 0, x, y, width, height, SWP_NOZORDER)
+
     def geometry(self, geometry:str=None) -> str:
         if geometry is None:
             return self.root.geometry()
@@ -156,19 +186,24 @@ class NoTitlebarTk:
 class Draggable(NoTitlebarTk):
     def __init__(self):
         super().__init__()
-        self._offsetx = 0
-        self._offsety = 0
+        self.dragging:bool = False
         self.bind("<Button-1>" ,self.clickwin)
         self.bind("<B1-Motion>", self.dragwin)
+        self.bind("<ButtonRelease-1>", self.releasewin)
 
-    def dragwin(self, event):
-        x = self.winfo_pointerx() - self._offsetx
-        y = self.winfo_pointery() - self._offsety
-        self.geometry(f"+{x}+{y}")
+    def dragwin(self, event:tk.Event) -> None:
+        if self.dragging:
+            x:int = self.winfo_pointerx() - self._offsetx
+            y:int = self.winfo_pointery() - self._offsety
+            super()._move_window_to(x, y)
 
-    def clickwin(self,event):
-        self._offsetx = self.winfo_pointerx() - self.winfo_rootx()
-        self._offsety = self.winfo_pointery() - self.winfo_rooty()
+    def releasewin(self, event:tk.Event) -> None:
+        self.dragging:bool = False
+
+    def clickwin(self, event:tk.Event) -> None:
+        self._offsetx:int = self.winfo_pointerx() - self.winfo_rootx()
+        self._offsety:int = self.winfo_pointery() - self.winfo_rooty()
+        self.dragging:bool = True
 
 
 # Example 1

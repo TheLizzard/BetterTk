@@ -17,7 +17,7 @@ BetterScrollBarV:type = BetterScrollBarVertical
 BetterScrollBarH:type = BetterScrollBarHorizontal
 
 
-if __name__ == "__main__a":
+if __name__ == "__main__":
     root = BetterTk(className="BetterTk")
     root.title("BetterTk")
 
