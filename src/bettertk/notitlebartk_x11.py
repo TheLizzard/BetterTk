@@ -211,6 +211,7 @@ class NoTitlebarTk:
 
         self.setup()
         self._overrideredirect()
+        self.wait_mapped()
 
     def _get_display(self, widget:tk.Misc) -> DISPLAY|None:
         assert isinstance(widget, tk.Misc|NoTitlebarTk), "TypeError"
@@ -268,6 +269,9 @@ class NoTitlebarTk:
         # Flush the changes
         XFlush(self.display)
 
+    def reparent_window(self, child:WINDOW, x:int, y:int) -> None:
+        self._reparent_window(child, self.window, x, y)
+
     def _reparent_window(self, child:WINDOW, parent:WINDOW, x:int, y:int):
         #raise NotImplementedError("Right now this doesn't handle events " \
         #                          "or repaints correctly.")
@@ -275,7 +279,7 @@ class NoTitlebarTk:
         XSync(self.display, False)
         XReparentWindow(self.display, child, parent, x, y)
         XMapWindow(self.display, child)
-        sleep(0.01)
+        sleep(0.1)
         XSync(self.display, False)
         XAddToSaveSet(self.display, child)
         XFlush(self.display) # Might be unneeded?
@@ -392,6 +396,15 @@ class Draggable(NoTitlebarTk):
         self.dragging:bool = True
 
 
+if __name__ == "__main__":
+    root = Draggable()
+    child = 65011719
+    root.geometry("870x400")
+    root.reparent_window(child, 0, 0)
+    # root.mainloop()
+    raise SystemExit # Tell IDLE to run REPL loop
+
+
 # Example 1
 if __name__ == "__main__":
     root = NoTitlebarTk()
@@ -430,16 +443,8 @@ if __name__ == "__main__":
     root.mainloop()
 
 
-# Example 3
-if __name__ == "__main__":
-    root = Draggable()
-    # root.transparentcolor("white")
-
-    root.mainloop()
-
-
 # Test
-if __name__ == "__main__a":
+if __name__ == "__main__":
     from time import sleep
     for i in range(1000):
         root = NoTitlebarTk()

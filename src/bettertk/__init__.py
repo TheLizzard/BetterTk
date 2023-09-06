@@ -222,7 +222,7 @@ class CloseButton(tk.Button):
     def __init__(self, master, betterroot, settings:BetterTkSettings):
         self.betterroot = betterroot
         if settings.USE_UNICODE:
-            text = "\u26cc"
+            text = "\u26cc" # "\u2715"
         else:
             text = "X"
         super().__init__(master, text=text, relief="flat", takefocus=False,

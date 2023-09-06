@@ -26,7 +26,7 @@ class Pipe:
         self.opened:bool = True
 
     def read(self, length:int) -> bytes:
-        assert self.opened, "Pipe isn't open"
+        if not self.opened: return b""
         assert self.mode == READ, "Pipe isn't in os.O_RDONLY mode"
         return os.read(self.fd, length)
 

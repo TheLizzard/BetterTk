@@ -8,7 +8,6 @@ def does_x11_works() -> bool:
         ctypes.cdll.LoadLibrary("libX11.so.6")
         return True
     except OSError:
-        raise
         return False
 
 IS_UNIX:bool = (os.name == "posix")

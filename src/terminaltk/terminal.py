@@ -16,63 +16,74 @@ except ImportError:
 SLAVE_PATH:str = os.path.join(os.path.dirname(__file__), "slave.py")
 PING_SIGNAL:bytes = b"="
 PONG_SIGNAL:bytes = b"#"
-DEBUG_XTERM:bool = False
 
 
 if IS_WINDOWS:
     raise NotImplementedError("Convert the command bellow to Windows")
 elif IS_UNIX:
-    KEY_BINDINGS:tuple[str] = (
-                                "Ctrl Shift <Key>C: copy-selection(CLIPBOARD)",
-                                "Ctrl <Key>V: insert-selection(CLIPBOARD)",
-                                "Ctrl <Key>W: quit()",
-                                "Ctrl <Key>X: copy-selection(CLIPBOARD)",
-                                "Shift <Key>Left: keymap(None)",
-                                "Shift <Key>Right: keymap(None)",
-                                "Shift <Key>Up: keymap(None)",
-                                "Shift <Key>Down: keymap(None)",
-                                "Ctrl <Key>KP_Add: larger-vt-font()",
-                                "Ctrl <Key>KP_Subtract: smaller-vt-font()",
-                                "Ctrl <Key>+: larger-vt-font()",
-                                "Ctrl <Key>-: smaller-vt-font()",
-                              )
-    KEY_BINDINGS:str = r" \n ".join(KEY_BINDINGS)
-    XRMS:str = (
-                  f"VT100.Translations: #override {KEY_BINDINGS}",
-                  # Do NOT delete the next line!
-                  #r"VT100.Translations: #override Ctrl Shift <Key>C: copy-selection(CLIPBOARD) \n Ctrl <Key>V: insert-selection(CLIPBOARD) \n Ctrl <Key>W: quit() \n Ctrl <Key>X: copy-selection(CLIPBOARD)",
-                  "curses: true",
-                  "cutNewline: true",
-                  "scrollTtyOutput: false",
-                  "autoScrollLock: true",
-                  "jumpScroll: false",
-                  "scrollKey: true",
-                  "omitTranslation: popup-menu",
-                  "allowWindowOps: true",
-                  # "ScrollBar: on",
-                  # "xterm*sixelScrolling: on",
-                  # f"xterm*scrollbar.thumb: {THUMB_SPRITE}",
-               )
-    ARGS:str = "-b 0 -bw 0 -bc +ai -bg black -fg white -fa Monospace " \
-               "-fs 12 -cu -sb -rightbar -sl 100000 "
-    for XRM in XRMS:
-        ARGS += f"-xrm 'xterm*{XRM}' "
-    ARGS += f'-e {sys.executable} "{SLAVE_PATH}" "{{}}" "{{}}"'
+    XTERM_DEBUG:bool = False
+    XTERM_KEY_BINDINGS:str = r" \n ".join((
+                              "Ctrl Shift <Key>C: copy-selection(CLIPBOARD)",
+                              "Ctrl <Key>V: insert-selection(CLIPBOARD)",
+                              "Ctrl <Key>W: quit()",
+                              "Ctrl <Key>X: copy-selection(CLIPBOARD)",
+                              "Shift <Key>Left: keymap(None)",
+                              "Shift <Key>Right: keymap(None)",
+                              "Shift <Key>Up: keymap(None)",
+                              "Shift <Key>Down: keymap(None)",
+                              "Ctrl <Key>KP_Add: larger-vt-font()",
+                              "Ctrl <Key>KP_Subtract: smaller-vt-font()",
+                              "Ctrl <Key>+: larger-vt-font()",
+                              "Ctrl <Key>-: smaller-vt-font()",
+                                         ))
+    XTERM_XRMS:str = (
+                       f"VT100.Translations: #override {XTERM_KEY_BINDINGS}",
+                       # Do NOT delete the next line!
+                       #r"VT100.Translations: #override Ctrl Shift <Key>C: copy-selection(CLIPBOARD) \n Ctrl <Key>V: insert-selection(CLIPBOARD) \n Ctrl <Key>W: quit() \n Ctrl <Key>X: copy-selection(CLIPBOARD)",
+                       "curses: true",
+                       "cutNewline: true",
+                       "scrollTtyOutput: false",
+                       "autoScrollLock: true",
+                       "jumpScroll: false",
+                       "scrollKey: true",
+                       "omitTranslation: popup-menu",
+                       "allowWindowOps: true",
+                       # "ScrollBar: on",
+                       # "xterm*sixelScrolling: on",
+                       # f"xterm*scrollbar.thumb: {THUMB_SPRITE}",
+                     )
+    XTERM_ARGS:str = "-b 0 -bw 0 -bc +ai -bg black -fg white -fa Monospace " \
+                     "-fs 12 -cu -sb -rightbar -sl 100000 "
+    for XTERM_XRM in XTERM_XRMS:
+        XTERM_ARGS += f"-xrm 'xterm*{XTERM_XRM}' "
+    XTERM_ARGS += f'-e {sys.executable} "{SLAVE_PATH}" "{{}}" "{{}}"'
+    KONSOLE_ARGS = f'-e {sys.executable} "{SLAVE_PATH}" "{{}}" "{{}}"'
 else:
     raise NotImplementedError("Don't know what this OS is")
 
 
 class BaseTerminal:
-    __slots__ = "proc", "pipe", "running"
+    """
+    Inherit from this base class overriding the `start` method and
+      implementing the optional `resize` method.
+    The implementation of the `start` method should call `self.run`.
+    If the `resize` method is implemented, it should tell the slave
+      terminal to resize itself to fit the width/height passed in.
+    If the `resize` method isn't implemented, the terminal will assume that
+      it can't be resized.
+    """
+
+    __slots__ = "proc", "pipe", "running", "resizable"
 
     def __init__(self, *, into:int=None) -> None:
         self.running:bool = False
+        self.resizable:bool = hasattr(self, "resize")
         self.pipe:TmpPipePair = TmpPipePair.from_tmp()
         self.start(*self.pipe.reverse(), into=into)
         assert self.running, "You must call \"self.run(command, env=env)\" " \
                              'inside "self.start"'
 
-    def run(self, command:str, *, env:dict[str,str]) -> None:
+    def run(self, command:str, *, env:dict[str,str]=os.environ) -> None:
         self.proc:Popen = Popen(command, env=env, shell=True, stdout=PIPE,
                                 stderr=PIPE)
         self.pipe.start()
@@ -99,23 +110,18 @@ class BaseTerminal:
                                   "call `self.run(command, env=env)` at " \
                                   "the end")
 
-    def resize(self, *, width:int, height:int) -> None:
-        raise NotImplementedError('Override this method. Some terminals ' \
-                                  'support the "\x1b[4;{height};{width}t" ' \
-                                  'ANSI escape code.')
-
 
 class XTermTerminal(BaseTerminal):
     __slots__ = ()
 
-    def start(self, slave2master:str, master2slave:str, *, into:int=None):
-        args:str = ARGS.format(slave2master, master2slave)
+    def start(self, slave2master:str, master2slave:str, *, into:tk.Misc=None):
+        args:str = XTERM_ARGS.format(slave2master, master2slave)
         if into is None:
             command:str = f"xterm {args}"
         else:
-            command:str = f"xterm -into {into} {args}"
+            command:str = f"xterm -into {into.winfo_id()} {args}"
         self.run(command, env=os.environ|dict(force_color_prompt="yes"))
-        if DEBUG_XTERM: Thread(target=self.debug_proc_end, daemon=True).start()
+        if XTERM_DEBUG: Thread(target=self.debug_proc_end, daemon=True).start()
 
     def resize(self, *, width:int, height:int) -> None:
         assert isinstance(width, int), "TypeError"
@@ -133,11 +139,28 @@ class XTermTerminal(BaseTerminal):
             print(stderr)
 
 
+class KonsoleTerminal(BaseTerminal):
+    __slots__ = ()
+
+    def start(self, slave2master:str, master2slave:str, *, into:tk.Misc=None):
+        raise NotImplementedError("Not fully implemented. " \
+                                  "Read the comment bellow")
+        args:str = KONSOLE_ARGS.format(slave2master, master2slave)
+        self.run(f"konsole {args}")
+        # Now we have to use `NoTitlebarTk._get_parent` on into
+        #   maybe even on into's tk.Tk and then use
+        #   `NoTitlebarTk._reparent_window(child, parent, x, y)`
+        #   where child is the output from "echo $WINDOWID" when run
+        #   from the slave
+
+    def ___resize(self, width:int, height:int) -> None:
+        raise RuntimeError("https://bugs.kde.org/show_bug.cgi?id=238073")
+
+
 if IS_UNIX:
     Terminal:type = XTermTerminal
 else:
-    raise NotImplementedError
-
+    raise NotImplementedError("OS not implemented")
 assert issubclass(Terminal, BaseTerminal), "You must subclass BaseTerminal."
 
 
@@ -168,7 +191,7 @@ def encode_print(text:str) -> bytes:
 
 
 if __name__ == "__main__":
-    DEBUG_XTERM:bool = True
+    XTERM_DEBUG:bool = True
     term:Terminal = Terminal()
     term.pipe.write(encode_run(0, ["bash"], " Bash Started ".center(80, "=")))
     term.pipe.write(encode_run(1, ["python3", "/home/thelizzard/.updater.py"], " Updater Started ".center(80, "=")))

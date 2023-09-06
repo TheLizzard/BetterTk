@@ -49,6 +49,7 @@ Notes:
          = cmd_id     number of args   [args*]
 
 Signals [master <= slave]:
+    STARTED                    # The slave was born
     EXITCODE<uint_2><uint_4>   # A proc has returned an exit code
     OUTPUT<uint_2><char*>      # The output from CHECK_STDOUT
     ERR<uint_2>                # Error (look at error codes)
@@ -279,9 +280,16 @@ class ProcManager:
                 exit_code_encoded:bytes = exit_code.to_bytes(4, "big")
                 pipe.write(b"EXITCODE" + cmd_id + exit_code_encoded)
                 self.proc:Popen = None
+                self.reset_stdin()
                 self.tickle()
         elif len(self.cmds_queue) != 0:
             self.start_proc(*self.cmds_queue.pop(0))
+
+    def reset_stdin(self) -> None:
+        if IS_UNIX:
+            # https://docs.python.org/3/library/termios.html#example
+            termios.tcsetattr(stdin.fileno(), termios.TCSADRAIN,
+                              default_stdin_state)
 
 
 def parse_buffer(buffer, proc_manager, signals_queue:list[str]) -> None:
@@ -347,6 +355,7 @@ def main() -> None:
     pipe = PipePair(*argv[1:], owns=False)
     pipe.start()
     assert IS_UNIX | IS_WINDOWS, "Invalid OS type"
+    pipe.write(b"STARTED")
 
     buffer:bytes = Buffer()
     running = True
@@ -360,12 +369,13 @@ def main() -> None:
         try:
             sleep(END_REFRESH_RATE/1000)
         except KeyboardInterrupt:
-            continue
-            threadint:Thread = Thread(target=signals_queue.append, daemon=True,
-                                      args=(b"INT",))
-            threadint.start()
+            pass
 
 try:
+    if IS_UNIX:
+        import termios
+        # https://docs.python.org/3/library/termios.html#example
+        default_stdin_state = termios.tcgetattr(stdin.fileno())
     pipe:PipePair = None
     exit_str:str = None
     main()

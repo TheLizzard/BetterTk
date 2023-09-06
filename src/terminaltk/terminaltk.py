@@ -3,6 +3,7 @@ from threading import Thread, Lock
 from PIL import ImageTk
 from time import sleep
 import tkinter as tk
+import os
 
 try:
     from .terminal import Terminal, encode_run, encode_print
@@ -27,6 +28,8 @@ ERRORS:dict[bytes:str] = {
 BKWARGS:dict = dict(activeforeground="white", activebackground="grey", bd=0,
                     bg="black", relief="flat", fg="white", compound="left",
                     highlightthickness=0)
+ICON:str = os.path.join(os.path.dirname(__file__), "sprites", "terminal.ico")
+if not os.path.exists(ICON): ICON:str = None
 
 
 def tk_wait_for_map(widget:tk.Misc) -> None:
@@ -84,8 +87,12 @@ class Buffer:
                 buff += self._read(1)
                 if len(buff) == 0:
                     break
+                elif buff == b"STARTED":
+                    self.msg_queue_append(("STARTED",))
+                    break
                 elif buff == PING_SIGNAL:
                     self.msg_queue_append(("PING",))
+                    break
                 elif buff == PONG_SIGNAL:
                     self.msg_queue_append(("PONG",))
                     break
@@ -143,9 +150,12 @@ class TerminalFrame(tk.Frame):
 
     def start(self) -> None:
         tk_wait_for_map(self)
-        self.terminal:Terminal = Terminal(into=super().winfo_id())
+        self.terminal:Terminal = Terminal(into=self)
         self.buffer:Buffer = Buffer(self.terminal.pipe)
-        super().bind("<Configure>", self._on_resize)
+        if self.terminal.resizable:
+            super().bind("<Configure>", self._on_resize)
+        else:
+            pass # ???
         self.started:bool = True
 
     def close(self, signal:bytes=b"KILL") -> None:
@@ -163,7 +173,7 @@ class TerminalFrame(tk.Frame):
 
     def queue(self, cmd_id:int, command:tuple[str], to_print:str) -> None:
         assert self.started, 'Call ".start()" first.'
-        self.buffer.write(encode_run(0, command, to_print))
+        self.buffer.write(encode_run(cmd_id, command, to_print))
 
     def destroy(self) -> None:
         if self.started:
@@ -177,14 +187,18 @@ class TerminalFrame(tk.Frame):
 class TerminalTk(BetterTk):
     __slots__ = "terminal", "pause_button", "close_button", "sprites", \
                 "running_state", "chk_output", "closing_state", \
-                "running_something", "_iqueue"
+                "running_something", "_iqueue", "cmd_names"
 
     def __init__(self, **kwargs) -> TerminalTk:
-        self.chk_output:tuple[int,str] = (None, None)
         self.running_state:tuple[int,int] = (None, None)
+        self.chk_output:tuple[int,str] = (None, None)
+        self.cmd_names:dict[int:str] = dict()
         self.running_something:bool = False
         self._iqueue:list[tuple] = []
-        super().__init__(**kwargs)
+        super().__init__(className="TerminalTk", **kwargs)
+        if ICON is not None:
+            super().iconphoto(ICON, ICON)
+        super().title("TerminalTk")
         self.setup_buttons()
         self.terminal:TerminalFrame = TerminalFrame(self, width=815, height=460)
         self.terminal.pack(side="bottom", fill="both", expand=True)
@@ -210,7 +224,7 @@ class TerminalTk(BetterTk):
                                       command=self._toggle_close, **BKWARGS,
                                       width=70, text="Close")
         self.kill_button = tk.Button(frame, image=self.sprites["kill"],
-                                     command=self._kill, **BWARGS,
+                                     command=self._kill, **BKWARGS,
                                      width=70, text="Kill")
         self.settings_button = tk.Button(frame, command=self._settings,
                                          image=self.sprites["settings"],
@@ -221,11 +235,15 @@ class TerminalTk(BetterTk):
         self.settings_button.grid(row=1, column=5)
         frame.grid_columnconfigure(4, weight=1)
 
-    def queue(self, *args) -> None:
-        self.terminal.queue(*args)
+    def queue(self, cmd_id:int, cmd:tuple[str], print_str:str) -> None:
+        assert len(cmd) > 0, "ValueError"
+        self.cmd_names[cmd_id] = cmd[0]
+        self.terminal.queue(cmd_id, cmd, print_str)
 
-    def iqueue(self, *args, condition:Predicate[int]=None) -> None:
-        self._iqueue.append((args, condition))
+    def iqueue(self, cmd_id, cmd, print_str, condition:Predicate[int]=None):
+        assert len(cmd) > 0, "ValueError"
+        self.cmd_names[cmd_id] = cmd[0]
+        self._iqueue.append(((cmd_id, cmd, print_str), condition))
         if not self.running_something:
             self.iqueue_next()
 
@@ -250,7 +268,9 @@ class TerminalTk(BetterTk):
         super().after(READ_MSG_RATE, self.handle_msg_loop)
 
     def handle_msg(self, msg:str, *args) -> None:
-        if msg == "PING":
+        if msg == "STARTED":
+            ...
+        elif msg == "PING":
             self.terminal.send_signal(PONG_SIGNAL)
         elif msg == "PONG":
             ...
@@ -267,6 +287,8 @@ class TerminalTk(BetterTk):
             assert len(args) == 1, "SanityCheck"
             self.running_something:bool = True
             self.running_state:tuple[int,int] = (args[0], None)
+            name:str = self.cmd_names.get(args[0], "???")
+            super().title(f"TerminalTk[{name}]")
             self._proc_running()
         elif msg == "EXITCODE":
             assert len(args) == 2, "SanityCheck"
@@ -275,6 +297,7 @@ class TerminalTk(BetterTk):
             self.running_something:bool = False
             text:str = f" Process Ended [{args[1]}] ".center(80, "#")+"\n"
             self.terminal.buffer.send_force_print(text)
+            super().title("TerminalTk")
             self._no_proc_running()
             self.iqueue_next()
         elif msg == "OUTPUT":
