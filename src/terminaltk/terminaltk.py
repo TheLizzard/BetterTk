@@ -31,6 +31,9 @@ BKWARGS:dict = dict(activeforeground="white", activebackground="grey", bd=0,
 ICON:str = os.path.join(os.path.dirname(__file__), "sprites", "terminal.ico")
 if not os.path.exists(ICON): ICON:str = None
 
+SPRITES_NEEDED:set[str] = {"pause", "play", "stop", "close", "restart",
+                           "kill", "settings"}
+
 
 def tk_wait_for_map(widget:tk.Misc) -> None:
     def inner() -> None:
@@ -197,7 +200,7 @@ class TerminalTk(BetterTk):
         self._iqueue:list[tuple] = []
         super().__init__(className="TerminalTk", **kwargs)
         if ICON is not None:
-            super().iconphoto(ICON, ICON)
+            super().iconphoto(True, ICON)
         super().title("TerminalTk")
         self.setup_buttons()
         self.terminal:TerminalFrame = TerminalFrame(self, width=815, height=460)
@@ -207,7 +210,7 @@ class TerminalTk(BetterTk):
 
     def setup_buttons(self) -> None:
         self.sprites:dict[str,ImageTk.PhotoImage] = dict()
-        sprites = create_sprites(256>>1, 256>>3, 220)
+        sprites = create_sprites(256>>1, 256>>3, 220, SPRITES_NEEDED)
         for name, image in sprites.items():
             self.sprites[name] = ImageTk.PhotoImage(image, master=self)
 

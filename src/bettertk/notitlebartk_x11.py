@@ -179,62 +179,74 @@ XClearArea.restype = INT
 XClearArea.errcheck = errcheck_not_zero
 
 
-OPEN_DISPLAY:DISPLAY = None
+_display_owners:set[NoTitlebarTk] = set()
+DEBUG:bool = False
+TEST:bool = False
+
+
+class CleanupTk(tk.Tk):
+    def destroy(self) -> None:
+        super().destroy()
+        self.cleanup()
+    def cleanup(self) -> None:
+        ...
+
+class CleanupToplevel(tk.Toplevel):
+    def destroy(self) -> None:
+        super().destroy()
+        self.cleanup()
+    def cleanup(self) -> None:
+        ...
+
 
 class NoTitlebarTk:
     def __init__(self, master=None, withdraw:bool=False, **kwargs):
         # Figure out the master.
         if master is None:
-            self.owns_display:bool = True
-            self.root = tk.Tk(**kwargs)
+            self.root = CleanupTk(**kwargs)
         elif isinstance(master, (tk.Misc, NoTitlebarTk)):
-            self.display = self._get_display(master)
-            if self.display is None:
-                self.owns_display:bool = True
-            else:
-                self.owns_display:bool = False
-            self.root = tk.Toplevel(master, **kwargs)
+            self.root = CleanupToplevel(master, **kwargs)
         else:
             raise ValueError("Invalid `master` argument. It must be " \
                              "`None` or a tkinter widget")
 
         self._fullscreen:bool = False
         self._maximised:bool = False
+        self._cleanedup:bool = False
 
         dir_self:list = dir(self)
-        for method_name in dir(self.root):
-            if method_name[-2:] == "__":
+        for attribute_name in dir(self.root):
+            if attribute_name[-2:] == "__":
                 continue
-            method = getattr(self.root, method_name)
-            if method_name not in dir_self:
-                setattr(self, method_name, method)
+            attribute = getattr(self.root, attribute_name)
+            if attribute_name not in dir_self:
+                setattr(self, attribute_name, attribute)
 
-        self.setup()
+        self.display:DISPLAY = self._get_display(master)
+        self.wait_mapped()
+        self.window:WINDOW = self._get_parent(self.root.winfo_id())
         self._overrideredirect()
         self.wait_mapped()
 
-    def _get_display(self, widget:tk.Misc) -> DISPLAY|None:
-        assert isinstance(widget, tk.Misc|NoTitlebarTk), "TypeError"
-        while True:
-            if widget is None:
-                return None
-            if isinstance(widget, NoTitlebarTk):
-                return widget.display
-            if hasattr(widget, "root"):
-                return widget.root.display
-            widget:tk.Misc = widget.master
+    def _get_display(self, widget:tk.Misc) -> DISPLAY:
+        self.root.cleanup = self.cleanup
+        _display_owners.add(self)
+        if DEBUG: print(f"[DEBUG]: display_owners = {len(_display_owners)}")
+        for notitlebartk in _display_owners:
+            if notitlebartk is not self:
+                return notitlebartk.display
+        if DEBUG: print(f"[DEBUG]: Opening display")
+        return XOpenDisplay(None)
 
-    def setup(self) -> None:
-        global OPEN_DISPLAY
-        if self.owns_display:
-            assert OPEN_DISPLAY is None, "InternalError"
-            # Get the default display
-            self.display:DISPLAY = XOpenDisplay(None)
-            OPEN_DISPLAY = self.display
-
-        self.wait_mapped()
-        # Get the parent of the window
-        self.window:WINDOW = self._get_parent(self.root.winfo_id())
+    def cleanup(self) -> None:
+        assert not self._cleanedup, "InternalError"
+        assert self in _display_owners, "InternalError"
+        self._cleanedup:bool = True
+        _display_owners.remove(self)
+        if DEBUG: print(f"[DEBUG]: display_owners = {len(_display_owners)}")
+        if len(_display_owners) == 0:
+            if DEBUG: print(f"[DEBUG]: Closing display")
+            XCloseDisplay(self.display)
 
     def _get_parent(self, winid:int) -> WINDOW:
         parent:WINDOW = WINDOW()
@@ -249,13 +261,6 @@ class NoTitlebarTk:
             # WINDOW* children;
             pass
         return parent
-
-    def cleanup(self) -> None:
-        global OPEN_DISPLAY
-        if self.owns_display:
-            assert OPEN_DISPLAY == self.display, "InternalError"
-            XCloseDisplay(self.display)
-            OPEN_DISPLAY = None
 
     def _overrideredirect(self) -> None:
         # Change the motif hints of the window
@@ -368,10 +373,6 @@ class NoTitlebarTk:
         else:
             self.maximised()
 
-    def destroy(self) -> None:
-        self.root.destroy()
-        self.cleanup()
-
 
 class Draggable(NoTitlebarTk):
     def __init__(self):
@@ -394,15 +395,6 @@ class Draggable(NoTitlebarTk):
         self._offsetx:int = self.winfo_pointerx() - self.winfo_rootx()
         self._offsety:int = self.winfo_pointery() - self.winfo_rooty()
         self.dragging:bool = True
-
-
-if __name__ == "__main__":
-    root = Draggable()
-    child = 65011719
-    root.geometry("870x400")
-    root.reparent_window(child, 0, 0)
-    # root.mainloop()
-    raise SystemExit # Tell IDLE to run REPL loop
 
 
 # Example 1
@@ -430,21 +422,21 @@ if __name__ == "__main__":
     child = NoTitlebarTk(root)
     child.geometry("150x150")
 
-    tk.Label(child, text="Child").pack(fill="x")
-    tk.Button(child, text="Exit", command=child.destroy).pack(fill="x")
-    tk.Button(child, text="Minimise", command=child.iconify).pack(fill="x")
-    tk.Button(child, text="Fullscreen", command=child.toggle_fullscreen).pack(fill="x")
-
     tk.Label(root, text="Master").pack(fill="x")
     tk.Button(root, text="Exit", command=root.destroy).pack(fill="x")
     tk.Button(root, text="Minimise", command=root.iconify).pack(fill="x")
     tk.Button(root, text="Fullscreen", command=root.toggle_fullscreen).pack(fill="x")
 
+    tk.Label(child, text="Child").pack(fill="x")
+    tk.Button(child, text="Exit", command=child.destroy).pack(fill="x")
+    tk.Button(child, text="Minimise", command=child.iconify).pack(fill="x")
+    tk.Button(child, text="Fullscreen", command=child.toggle_fullscreen).pack(fill="x")
+
     root.mainloop()
 
 
-# Test
-if __name__ == "__main__":
+# Test 1
+if (__name__ == "__main__") and TEST:
     from time import sleep
     for i in range(1000):
         root = NoTitlebarTk()
@@ -455,6 +447,16 @@ if __name__ == "__main__":
 
         if i % 20 == 0:
             print(f"Passed {i}th test")
+
+
+# Test 2
+if (__name__ == "__main__") and TEST:
+    print("Creating root")
+    root = tk.Tk()
+    print("Creating child a")
+    childa = NoTitlebarTk(root)
+    print("Creating child b")
+    childb = NoTitlebarTk(root)
 
 
 """

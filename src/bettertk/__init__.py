@@ -659,23 +659,31 @@ class BetterTk(tk.Frame):
         super().destroy()
         self.root.destroy()
 
-    def _change_icon(self, filename:str) -> ImageTk.PhotoImage:
-        if filename is None:
-            return self._tk_icon
-        self.root.update()
+    def _change_icon(self, image:Image.Image) -> None:
+        if isinstance(image, str):
+            image:Image.Image = Image.open(filename)
+            self._tk_icon_2 = ImageTk.PhotoImage(file=filename, master=self)
+        elif isinstance(image, Image.Image):
+            self._tk_icon_2 = ImageTk.PhotoImage(image, master=self)
+        else:
+            raise ValueError("Image must be a str path or a PIL.Image.Image "\
+                             "otherwise the image can't be resized")
+        self.root.update_idletasks()
         # The 4 is because of the label's border
         size = self.title_frame.winfo_height() - 4
-        img = Image.open(filename).resize((size, size), Image.LANCZOS)
+        img = image.resize((size, size), Image.LANCZOS)
         self._tk_icon = ImageTk.PhotoImage(img, master=self.root)
         self.icon_label.config(image=self._tk_icon)
 
-    def iconbitmap(self, filename:str=None) -> ImageTk.PhotoImage:
-        self._change_icon(filename)
-        self.root.iconbitmap(filename) # I recommend `.iconphoto` instead
+    def iconbitmap(self, filepath:str) -> None:
+        assert isinstance(filepath, str), "TypeError"
+        # I recommend `.iconphoto` instead
+        self._change_icon(filepath)
+        self.root.iconbitmap(filepath)
 
-    def iconphoto(self, default:bool, filename:str) -> None:
-        self._change_icon(filename)
-        self._tk_icon_2 = ImageTk.PhotoImage(master=self, file=filename)
+    def iconphoto(self, default:bool, image:str|Image.Image) -> None:
+        assert isinstance(default, bool), "TypeError"
+        self._change_icon(image)
         self.root.iconphoto(default, self._tk_icon_2)
 
     def resizable(self, width:int=None, height:int=None) -> (bool, bool):

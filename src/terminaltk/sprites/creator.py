@@ -211,6 +211,7 @@ def draw_restart(r1, r2, d1, d2, l, s, br, size:int) -> DrawImage:
     return image
 
 def draw_close(r:int, w:int, br:int, size:int) -> DrawImage:
+    """ Same as draw_error but with ORANGE instead of RED """
     r, w, br = r/256*size, w/256*size, br/256*size
     image:DrawImage = DrawImage(size)
     image.draw_circle((size>>1,size>>1), br, colour=ORANGE)
@@ -248,6 +249,7 @@ def draw_settings(n, r1, r2, ir1, ir2, or1, or2, br, size, reverse=False) -> Dra
     return image
 
 def draw_stop(y1, y2, w, r, br, size) -> DrawImage:
+    """ Same as draw_info but with ORANGE instead of BLUE """
     w, r, br = w/256*size, r/256*size, br/256*size
     y1, y2 = y1/256*size, y2/256*size
     image:DrawImage = DrawImage(size)
@@ -274,6 +276,26 @@ def draw_warning(s, y1, y2, y3, w, size) -> DrawImage:
     image.draw_circle((size>>1,y3+ty3+w/2), w/2, colour=BLACK)
     return image
 
+def draw_info(y1, y2, w, r, br, size) -> DrawImage:
+    """ Same as draw_stop but with BLUE instead of ORANGE """
+    w, r, br = w/256*size, r/256*size, br/256*size
+    y1, y2 = y1/256*size, y2/256*size
+    image:DrawImage = DrawImage(size)
+    image.draw_circle((size>>1,size>>1), br, colour=BLUE)
+    image.draw_rounded_line((size>>1,y1), (size>>1,y2), w, colour=WHITE)
+    image.draw_circle((size>>1,size-y1-r+w), r, colour=WHITE)
+    return image
+
+def draw_error(r:int, w:int, br:int, size:int) -> DrawImage:
+    """ Same as draw_close but with RED instead of ORANGE """
+    r, w, br = r/256*size, w/256*size, br/256*size
+    image:DrawImage = DrawImage(size)
+    image.draw_circle((size>>1,size>>1), br, colour=RED)
+    d = (size>>1) - r/sqrt(2)
+    image.draw_rounded_line((d,d), (size-d,size-d), w)
+    image.draw_rounded_line((size-d,d), (d,size-d), w)
+    return image
+
 def draw_test(size) -> DrawImage:
     image:DrawImage = DrawImage(size)
     image.draw_circle((size>>1,size>>1), 100, colour=WHITE)
@@ -283,24 +305,42 @@ def draw_test(size) -> DrawImage:
 def draw_addon() -> Image.Image: ...
 
 
-def init(size:int, show_size:int, inner_size:int) -> dict[str:Image.Image]:
+ALL_SPRITE_NAMES:set[str] = {"pause", "play", "stop", "close", "restart",
+                             "kill", "settings", "warning", "info", "error"}
+#ALL_SPRITE_NAMES = {"warning", "info", "error"}
+
+def init(size:int, show_size:int, inner_size:int,
+         sprites_wanted:set[str]=ALL_SPRITE_NAMES) -> dict[str:Image.Image]:
     inner_size:int = int(inner_size/256*size)
     sprites:dict[str,Image.Image] = dict()
     start:float = perf_counter()
-    sprites["pause"] = draw_pause(108, 88, 15, 100, size)
-    sprites["play"] = draw_play(95, 77, None, 100, size)
-    sprites["stop"] = draw_stop(75, 135, 20, 15, 100, size)
-    sprites["close"] = draw_close(65, 15, 100, size)
-    sprites["restart"] = draw_restart(50, 65, 50, 40, None, 15, 100, size)
-    sprites["kill"] = draw_kill(50, 65, 40, 65, 130, 15, 100, size)
-    sprites["settings"] = draw_settings(6, 15, 30, 15, 30, 60, 75, 100, size)
-    sprites["warning"] = draw_warning(180, 62, 128, 144, 16, size)
+    if "pause" in sprites_wanted:
+        sprites["pause"] = draw_pause(108, 88, 15, 100, size)
+    if "play" in sprites_wanted:
+        sprites["play"] = draw_play(95, 77, None, 100, size)
+    if "stop" in sprites_wanted:
+        sprites["stop"] = draw_stop(75, 135, 20, 15, 100, size)
+    if "close" in sprites_wanted:
+        sprites["close"] = draw_close(65, 15, 100, size)
+    if "restart" in sprites_wanted:
+        sprites["restart"] = draw_restart(50, 65, 50, 40, None, 15, 100, size)
+    if "kill" in sprites_wanted:
+        sprites["kill"] = draw_kill(50, 65, 40, 65, 130, 15, 100, size)
+    if "settings" in sprites_wanted:
+        sprites["settings"] = draw_settings(6, 15, 30, 15, 30, 60, 75, 100, size)
+    if "warning" in sprites_wanted:
+        sprites["warning"] = draw_warning(180, 62, 128, 144, 16, size)
+    if "info" in sprites_wanted:
+        sprites["info"] = draw_info(75, 135, 20, 15, 100, size)
+    if "error" in sprites_wanted:
+        sprites["error"] = draw_error(65, 15, 100, size)
     sprites = {name:img.crop_resize(show_size, inner_size) for name,img in sprites.items()}
     if DEBUG: print(f"[DEBUG]: Overall: {perf_counter()-start:.2f} seconds")
     return sprites
 
 def main() -> None:
-    sprites:dict[str:Image.Image] = init(256>>1, 256>>3, 220)
+    size:int = 256#>>1
+    sprites:dict[str:Image.Image] = init(size, size>>1, 220)
 
     def toggle_play(event:tk.Event=None) -> None:
         if button_start.cget("text") == "Pause":
