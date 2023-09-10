@@ -338,7 +338,23 @@ def init(size:int, show_size:int, inner_size:int,
     if DEBUG: print(f"[DEBUG]: Overall: {perf_counter()-start:.2f} seconds")
     return sprites
 
-def main() -> None:
+
+class SpritesCache:
+    __slots__ = "sprites", "args"
+
+    def __init__(self, size:int, show_size:int, inner_size:int) -> SpritesCache:
+        self.args:tuple[int,int,int] = (size, show_size, inner_size)
+        self.sprites:dict[str:Image.Image] = dict()
+
+    def __getitem__(self, key:str) -> Image.Image|None:
+        if key not in ALL_SPRITE_NAMES:
+            return None
+        if key not in self.sprites:
+            self.sprites[key] = init(*self.args, {key})[key]
+        return self.sprites[key]
+
+
+if __name__ == "__main__":
     size:int = 256#>>1
     sprites:dict[str:Image.Image] = init(size, size>>1, 220)
 
@@ -358,16 +374,11 @@ def main() -> None:
     root.geometry("+0+0")
     root.resizable(False, False)
 
-    sprites = {name:ImageTk.PhotoImage(img) for name,img in sprites.items()}
+    tksprites = {name:ImageTk.PhotoImage(img) for name,img in sprites.items()}
 
     labels = []
-    for _, image in sprites.items():
+    for _, image in tksprites.items():
         label = tk.Label(root, bd=0, highlightthickness=0, bg="black")
         label.pack(side="left")
         label.config(image=image)
         label.bind("<Button-1>", lambda e: print(e.x, e.y))
-
-    root.mainloop()
-
-if __name__ == "__main__":
-    main()
