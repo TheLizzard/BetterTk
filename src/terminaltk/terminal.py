@@ -9,7 +9,7 @@ try:
     from bettertk.get_os import IS_WINDOWS, IS_UNIX
     from piper import TmpPipePair
 except ImportError:
-    from ..bettertk.get_os import IS_WINDOW, IS_UNIX
+    from ..bettertk.get_os import IS_WINDOWS, IS_UNIX
     from .piper import TmpPipePair
 
 
@@ -82,6 +82,9 @@ class BaseTerminal:
         self.start(*self.pipe.reverse(), into=into)
         assert self.running, "You must call \"self.run(command, env=env)\" " \
                              'inside "self.start"'
+
+    def cancel_all(self) -> None:
+        self.send_signal(b"CANCEL_ALL")
 
     def run(self, command:str, *, env:dict[str,str]=os.environ) -> None:
         self.proc:Popen = Popen(command, env=env, shell=True, stdout=PIPE,
@@ -177,9 +180,13 @@ def _encode_args(args:tuple[str]|list[str]) -> bytes:
     for arg in args: _assert_no_null(arg)
     return "\x00".join(args).encode("utf-8")+b"\x00"
 
-def encode_run(cmd_id:int, args:tuple[str], string_to_print) -> bytes:
+def encode_run(cmd_id:int, args:tuple[str], string_to_print:str|None) -> bytes:
+    if string_to_print is None:
+        string_to_print:bytes = b""
+    else:
+        string_to_print:bytes = string_to_print.encode("utf-8") + b"\n"
     return b"RUN" + cmd_id.to_bytes(2,"big") + len(args).to_bytes(2,"big") + \
-           _encode_args(args) + string_to_print.encode("utf-8") + b"\n\x00"
+           _encode_args(args) + string_to_print + b"\x00"
 
 def encode_check_stdout(cmd_id:int, args:tuple[str]) -> bytes:
     return b"CHECK_STDOUT" + cmd_id.to_bytes(2,"big") + \

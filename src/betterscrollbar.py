@@ -77,7 +77,7 @@ class BetterScrollBarVertical(tk.Canvas, BaseBetterScrollBar):
 
 
 class BetterScrollBarHorizontal(tk.Canvas, BaseBetterScrollBar):
-    __slots__ = ("mouse_pressed", "x0", "x1")
+    __slots__ = "mouse_pressed", "x0", "x1", "hide", "shown", "grid_kwargs"
 
     def __init__(self, master, orient="horizontal", **kwargs):
         if orient != "horizontal":
@@ -97,8 +97,19 @@ class BetterScrollBarHorizontal(tk.Canvas, BaseBetterScrollBar):
         super().bind("<Motion>", self.on_motion)
         super().bind("<Leave>", self.reset_thumb_colour)
 
+        self.hide:bool = False
+        self.shown:bool = True
+
     def set(self, low:str, high:str) -> None:
-        width = self.winfo_width()
+        if (low == "0.0") and (high == "1.0") and self.hide and self.shown:
+            self.grid_kwargs = super().grid_info()
+            super().grid_forget()
+            self.shown:bool = False
+        elif ((low != "0.0") or (high != "1.0")) and self.hide and (not self.shown):
+            super().grid(**self.grid_kwargs)
+            self.shown:bool = True
+
+        width = super().winfo_width()
         self.x0 = max(int(width * float(low)), 0)
         self.x1 = min(int(width * float(high)), width)
         super().coords(self.thumb, self.x0, 0, self.x1, self.winfo_height())
@@ -122,6 +133,16 @@ class BetterScrollBarHorizontal(tk.Canvas, BaseBetterScrollBar):
         if self.mouse_pressed:
             x = (event.x - self.offset) / self.winfo_width()
             self._set(x)
+
+    def pack(self, **kwargs) -> None:
+        if self.hide:
+            raise NotImplementedError("Hide only works with grid")
+        super().pack(**kwargs)
+
+    def place(self, **kwargs) -> None:
+        if self.hide:
+            raise NotImplementedError("Hide only works with grid")
+        super().place(**kwargs)
 
 
 class ScrolledText:

@@ -9,12 +9,10 @@ import traceback
 import signal
 import os
 
-try:
-    from piper import PipePair
-    from bettertk.get_os import IS_UNIX, IS_WINDOWS
-except ImportError:
-    from .piper import PipePair
-    from .bettertk.get_os import IS_UNIX, IS_WINDOWS
+# This file should never be imported just ran from python's interpreter
+from piper import PipePair
+IS_UNIX:bool = (os.name == "posix")
+IS_WINDOWS:bool = (os.name == "nt")
 
 
 """
@@ -42,6 +40,7 @@ Signals [master => slave]:
 | ###  | #                  |         | pong                                 |
 | ###  | PRINTSTR<char*>    |         | String to print immediately          |
 | ###  | CHECK_STDOUT<args> |         | Run a command and return the output  |
+| ###  | CANCEL_ALL         |         | Cancels all procs in queue           |
 +------+--------------------+---------+--------------------------------------+
 Notes:
     UWIN = Exists in Unix, Exists in Windows, Implemented, Need a proc running
@@ -76,7 +75,7 @@ def allisinstance(iterable:Iterable, T:type) -> bool:
 
 SIGNALS:tuple[bytes] = (b"RUN", b"PAUSE", b"UNPAUSE", b"RESTART", b"STOP",
                         b"KILL", b"FORCE_KILL", b"INT", b"EXIT", b"=", b"#",
-                        b"PRINTSTR", b"CHECK_STDOUT")
+                        b"PRINTSTR", b"CHECK_STDOUT", b"CANCEL_ALL")
 MAX_SIGNAL_LENGTH:int = max(map(len, SIGNALS))
 assert allisinstance(SIGNALS, bytes), "Not all signal are bytes"
 PING_SIGNAL:bytes = b"="
@@ -193,6 +192,9 @@ class ProcManager:
         self.last_command:tuple[int,tuple[str],str] = (cmd_id, command, string)
         pipe.write(b"RUNNING" + cmd_id.to_bytes(2,"big"))
 
+    def cancel_all(self) -> None:
+        self.cmds_queue.clear()
+
     def send_signal(self, sig:bytes) -> None:
         global running, wants_exit
         assert isinstance(sig, bytes), "TypeError"
@@ -308,6 +310,8 @@ def parse_buffer(buffer, proc_manager, signals_queue:list[str]) -> None:
         #    for i in buf:
         #        output += i.to_bytes(2,"big")
         #    pipe.write(output)
+        elif signal == b"CANCEL_ALL":
+            proc_manager.cancel_all()
         elif signal == b"CHECK_STDOUT":
             cmd_id:int = int.from_bytes(buffer.read(2, blocking=True), "big")
             command:tuple[str] = buffer.read_run_args()

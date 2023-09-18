@@ -161,6 +161,10 @@ class TerminalFrame(tk.Frame):
             pass # ???
         self.started:bool = True
 
+    def cancel_all(self) -> None:
+        assert self.started, 'Call ".start()" first.'
+        self.terminal.cancel_all()
+
     def close(self, signal:bytes=b"KILL") -> None:
         assert self.started, 'Call ".start()" first.'
         self.terminal.close(signal)
@@ -192,13 +196,13 @@ class TerminalTk(BetterTk):
                 "running_state", "chk_output", "closing_state", \
                 "running_something", "_iqueue", "cmd_names"
 
-    def __init__(self, **kwargs) -> TerminalTk:
+    def __init__(self, master:tk.Misc=None, **kwargs) -> TerminalTk:
         self.running_state:tuple[int,int] = (None, None)
         self.chk_output:tuple[int,str] = (None, None)
         self.cmd_names:dict[int:str] = dict()
         self.running_something:bool = False
         self._iqueue:list[tuple] = []
-        super().__init__(className="TerminalTk", **kwargs)
+        super().__init__(master, **kwargs)
         if ICON is not None:
             super().iconphoto(True, ICON)
         super().title("TerminalTk")
@@ -207,6 +211,10 @@ class TerminalTk(BetterTk):
         self.terminal.pack(side="bottom", fill="both", expand=True)
         self.terminal.start()
         self.handle_msg_loop()
+
+    def cancel_all(self) -> None:
+        self._iqueue.clear()
+        self.terminal.cancel_all()
 
     def setup_buttons(self) -> None:
         self.sprites:dict[str,ImageTk.PhotoImage] = dict()
@@ -355,7 +363,7 @@ if __name__ == "__main__":
     term.queue(["bash"], " bash started ".center(80, "="))
     term.queue(["python3"], " python3 started ".center(80, "="))
     """
-    term:TerminalTk = TerminalTk()
+    term:TerminalTk = TerminalTk(className="TerminalTk")
     term.iqueue(0, ["bash"], " bash started ".center(80, "="))
     term.iqueue(1, ["python3"], " python3 started ".center(80, "="),
                 condition=(0).__eq__)

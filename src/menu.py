@@ -2,7 +2,10 @@ from __future__ import annotations
 from itertools import zip_longest
 import tkinter as tk
 
-from __init__ import BetterTk, IS_UNIX, IS_WINDOWS
+try:
+    from . import BetterTk, IS_UNIX, IS_WINDOWS
+except ImportError:
+    from __init__ import BetterTk, IS_UNIX, IS_WINDOWS
 
 
 FRAME_KWARGS:dict[str,str] = dict(highlightthickness=0, bd=0, bg="black")
@@ -37,22 +40,22 @@ def stack_diff(old:list[T], new:list[T]) -> tuple[list[T],list[T]]:
 
 
 class MenuItem:
-    __slots__ = "widget", "rootmenu", "parentmenu"
+    __slots__ = "widget", "parentmenu"
 
-    def __init__(self, widget:tk.Misc, parentmenu:MenuBase):
-        self.parentmenu:MenuBase = parentmenu
+    def __init__(self, widget:tk.Misc, parentmenu:BetterMenuBase):
+        self.parentmenu:BetterMenuBase = parentmenu
         self.widget:tk.Misc = widget
         self.widget.menuitem:MenuItem = self
 
 
-class MenuBase:
+class BetterMenuBase:
     __slots__ = "parent", "shown", "direction", "container", "rootmenu"
 
-    def __init__(self, parent:MenuItem, direction:str) -> MenuBase:
+    def __init__(self, parent:MenuItem, direction:str) -> BetterMenuBase:
         assert isinstance(direction, str), "TypeError"
         assert isinstance(parent, MenuItem), "TypeError"
         assert direction in ("horizontal", "vertical"), "ValueError"
-        self.rootmenu:Menu = parent.parentmenu.rootmenu
+        self.rootmenu:BetterMenu = parent.parentmenu.rootmenu
         self.direction:bool = direction
         self.parent:MenuItem = parent
         self.shown:bool = False
@@ -83,7 +86,8 @@ class MenuBase:
     def add_command(self, name:str, func:Function=None) -> MenuItem:
         def wrapper() -> None:
             self.rootmenu.change_shown_to(None)
-            func()
+            if func is not None:
+                func()
         button:tk.Button = tk.Button(self.container, text=name, command=wrapper,
                                      **BUTTON_KWARGS)
         if self.direction == "horizontal":
@@ -109,14 +113,14 @@ class MenuBase:
         canvas.bind("<Enter>", self.mouse_over)
         return MenuItem(canvas, self)
 
-    def add_submenu(self, name:str, direction:str) -> SubMenu:
+    def add_submenu(self, name:str, direction:str) -> BetterSubMenu:
         def wrapper(event:tk.Event=None) -> None:
             if (event is not None) and (len(self.rootmenu.stack) == 0):
                 return None
             self.rootmenu.change_shown_to(submenu)
         menuitem:MenuItem = self.add_command(name, wrapper)
         menuitem.widget.bind("<Enter>", wrapper)
-        submenu:SubMenu = SubMenu(menuitem, direction)
+        submenu:BetterSubMenu = BetterSubMenu(menuitem, direction)
         return submenu
 
     def create_container(self) -> tk.Misc:
@@ -129,10 +133,10 @@ class MenuBase:
         raise NotImplementedError("Override this method")
 
 
-class SubMenu(MenuBase):
+class BetterSubMenu(BetterMenuBase):
     __slots__ = "root"
 
-    def __init__(self, parent:MenuItem, direction:str) -> SubMenu:
+    def __init__(self, parent:MenuItem, direction:str) -> BetterSubMenu:
         super().__init__(parent, direction)
 
     def create_container(self) -> tk.Misc:
@@ -160,29 +164,29 @@ class SubMenu(MenuBase):
     def hide(self) -> None:
         self.root.withdraw()
 
-    def get_stack(self) -> Iterable[MenuBase]:
+    def get_stack(self) -> Iterable[BetterMenuBase]:
         return reversed(tuple(self._get_stack()))
 
-    def _get_stack(self) -> Iterable[MenuBase]:
+    def _get_stack(self) -> Iterable[BetterMenuBase]:
         while self != self.parent.parentmenu:
             yield self
-            self:SubMenu = self.parent.parentmenu
+            self:BetterSubMenu = self.parent.parentmenu
 
 
-class Menu(MenuBase):
+class BetterMenu(BetterMenuBase):
     __slots__ = "stack", "rootmenu"
 
-    def __init__(self, master:tk.Misc, direction:str) -> Menu:
-        self.rootmenu:Menu = self
+    def __init__(self, master:tk.Misc, direction:str) -> BetterMenu:
+        self.rootmenu:BetterMenu = self
         super().__init__(MenuItem(master, self), direction)
-        self.stack:tuple[MenuBase] = ()
+        self.stack:tuple[BetterMenuBase] = ()
         self.shown:bool = True
 
-    def change_shown_to(self, submenu:SubMenu) -> None:
+    def change_shown_to(self, submenu:BetterSubMenu) -> None:
         if submenu is None:
-            new:tuple[MenuBase] = ()
+            new:tuple[BetterMenuBase] = ()
         else:
-            new:tuple[MenuBase] = tuple(submenu.get_stack())
+            new:tuple[BetterMenuBase] = tuple(submenu.get_stack())
         removes, adds = stack_diff(self.stack, new)
         for submenu in removes:
             submenu._hide()
@@ -190,7 +194,7 @@ class Menu(MenuBase):
             submenu._show()
         self.stack = new
 
-    def get_stack(self) -> Iterable[MenuBase]:
+    def get_stack(self) -> Iterable[BetterMenuBase]:
         return ()
 
     def create_container(self) -> tk.Misc:
@@ -206,7 +210,7 @@ class Menu(MenuBase):
                 widget:tk.Misc = widget.master
             self.change_shown_to(None)
         frame:tk.Frame = tk.Frame(self.parent.widget, **FRAME_KWARGS)
-        frame.bind_all("<Button-1>", hide_all)
+        frame.bind_all("<Button-1>", hide_all, add=True)
         return frame
 
     def pack(self, **kwargs) -> None:
@@ -231,7 +235,7 @@ class Menu(MenuBase):
 if __name__ == "__main__":
     root = tk.Tk()
     root.config(bg="black")
-    menu = Menu(root, direction="horizontal")
+    menu = BetterMenu(root, direction="horizontal")
     filemenu = menu.add_submenu("File", direction="vertical")
     filemenu.add_command("Open", lambda: print("open"))
 
@@ -258,10 +262,10 @@ import tkinter as tk
 class MenuItem:
     __slots__ = "parent", "item"
 
-    def __init__(self, parent:MenuBase, item:tk.Misc) -> MenuItem:
-        self.parent:MenuBase = parent
+    def __init__(self, parent:BetterMenuBase, item:tk.Misc) -> MenuItem:
+        self.parent:BetterMenuBase = parent
         self.item:tk.Misc = item
-        self.item.parent:MenuBase = parent
+        self.item.parent:BetterMenuBase = parent
 
 
 BUTTON_KWARGS:dict[str:str] = dict(relief="flat", bg="black", fg="white",
@@ -271,23 +275,23 @@ BUTTON_KWARGS:dict[str:str] = dict(relief="flat", bg="black", fg="white",
 MENU_BD:int = 2
 
 
-class MenuBase:
+class BetterMenuBase:
     __slots__ = "master", "container", "direction", "shown", "parent", \
                 "children", "rootmenu"
 
-    def __init__(self, parent:MenuBase, master:tk.Misc, direction:str):
+    def __init__(self, parent:BetterMenuBase, master:tk.Misc, direction:str):
         assert direction in ("horizontal", "vertical"), "ValueError"
         self.container:tk.Misc = self.create_container(master)
         self.direction:bool = (direction == "horizontal")
-        self.children:list[MenuBase] = []
-        self.parent:MenuBase = parent
+        self.children:list[BetterMenuBase] = []
+        self.parent:BetterMenuBase = parent
         self.master:tk.Misc = master
         self.shown:bool = False
         if parent is not None:
-            self.rootmenu:Menu = parent.rootmenu
+            self.rootmenu:BetterMenu = parent.rootmenu
 
-    def create_submenu(self, *, direction:str) -> SubMenu:
-        child:MenuBase = SubMenu(self, self.container, direction=direction)
+    def create_submenu(self, *, direction:str) -> BetterSubMenu:
+        child:BetterMenuBase = BetterSubMenu(self, self.container, direction=direction)
         self.children.append(child)
         return child
 
@@ -317,11 +321,11 @@ class MenuBase:
     def create_container(self, master:tk.Misc) -> tk.Misc:
         raise NotImplementedError("Override this method")
 
-    def get_stack(self) -> list[MenuBase]:
-        stack:list[MenuBase] = []
+    def get_stack(self) -> list[BetterMenuBase]:
+        stack:list[BetterMenuBase] = []
         while self.parent is not None:
             stack.append(self)
-            self:MenuBase = self.parent
+            self:BetterMenuBase = self.parent
         return stack
 
     def add_command(self, name:str, func:Function=None) -> MenuItem:
@@ -332,7 +336,7 @@ class MenuBase:
                 return None
             else:
                 self.rootmenu.set_stack(self.get_stack())
-            if isinstance(func, MenuBase):
+            if isinstance(func, BetterMenuBase):
                 func(button)
             elif func is not None:
                 self.rootmenu._hide()
@@ -341,7 +345,7 @@ class MenuBase:
                                      **BUTTON_KWARGS)
         button.pack(side="left" if self.direction else "top", anchor="nw",
                     fill="both")
-        if isinstance(func, MenuBase):
+        if isinstance(func, BetterMenuBase):
             button.bind("<Enter>", wrapper)
         return MenuItem(self, button)
 
@@ -357,7 +361,7 @@ class MenuBase:
         return MenuItem(self, canvas)
 
 
-class SubMenu(MenuBase):
+class BetterSubMenu(BetterMenuBase):
     __slots__ = "root"
 
     def create_container(self, master:tk.Misc) -> tk.Misc:
@@ -395,23 +399,23 @@ class SubMenu(MenuBase):
         self.root.withdraw()
 
 
-class Menu(MenuBase):
+class BetterMenu(BetterMenuBase):
     __slots__ = "isopen"
 
-    def __init__(self, master:tk.Misc, *, direction:str) -> Menu:
+    def __init__(self, master:tk.Misc, *, direction:str) -> BetterMenu:
         super().__init__(None, master, direction=direction)
-        self.rootmenu:Menu = self
+        self.rootmenu:BetterMenu = self
         self.isopen:bool = False
         self.shown:bool = True
 
     def show(self, *args) -> None:
-        raise RuntimeError("Don't call show on <Menu>")
+        raise RuntimeError("Don't call show on <BetterMenu>")
 
     def hide(self) -> None:
         self.isopen:bool = False
         self.shown:bool = True
 
-    def set_stack(self, stack:list[MenuBase]) -> None:
+    def set_stack(self, stack:list[BetterMenuBase]) -> None:
         self._hide()
         self.isopen:bool = True
         for submenu in stack:
@@ -458,7 +462,7 @@ class Menu(MenuBase):
 if __name__ == "__main__":
     root = tk.Tk()
     root.config(bg="black")
-    menu = Menu(root, direction="horizontal")
+    menu = BetterMenu(root, direction="horizontal")
     filemenu = menu.create_submenu(direction="vertical")
     savemenu = menu.create_submenu(direction="vertical")
 

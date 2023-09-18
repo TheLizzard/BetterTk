@@ -3,10 +3,10 @@ from PIL import ImageTk
 import tkinter as tk
 
 try:
-    from . import BetterTk
+    from .bettertk import BetterTk
     from .terminaltk.sprites import creator
 except ImportError:
-    from __init__ import BetterTk
+    from bettertk import BetterTk
     from terminaltk.sprites import creator
 
 

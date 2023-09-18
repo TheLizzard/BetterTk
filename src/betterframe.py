@@ -124,14 +124,15 @@ class BetterFrame(tk.Frame):
     """
     def __init__(self, master=None, scroll_speed:int=2, hscroll:bool=False,
                  vscroll:bool=True, bd:int=0, scrollbar_kwargs={},
-                 HScrollBarClass=tk.Scrollbar, bg="#f0f0ed",
-                 VScrollBarClass=tk.Scrollbar, **kwargs):
+                 hscrolltop:bool=False, bg="#f0f0ed",
+                 HScrollBarClass=tk.Scrollbar, VScrollBarClass=tk.Scrollbar,
+                 **kwargs):
         assert isinstance(scroll_speed, int), "`scroll_speed` must be an int"
         self.scroll_speed = scroll_speed
 
         self.master_frame = tk.Frame(master, bd=bd, bg=bg)
-        self.master_frame.grid_rowconfigure(0, weight=1)
-        self.master_frame.grid_columnconfigure(0, weight=1)
+        self.master_frame.grid_rowconfigure(1, weight=1)
+        self.master_frame.grid_columnconfigure(1, weight=1)
         self.dummy_canvas = tk.Canvas(self.master_frame, highlightthickness=0,
                                       bd=0, bg=bg, **kwargs)
         super().__init__(self.dummy_canvas, bg=bg)
@@ -142,14 +143,14 @@ class BetterFrame(tk.Frame):
                                                orient="vertical",
                                                command=self.dummy_canvas.yview,
                                                **scrollbar_kwargs)
-            self.v_scrollbar.grid(row=0, column=1, sticky="news")
+            self.v_scrollbar.grid(row=1, column=2, sticky="news")
             self.dummy_canvas.configure(yscrollcommand=self.v_scrollbar.set)
         if hscroll:
             self.h_scrollbar = HScrollBarClass(self.master_frame,
                                                orient="horizontal",
                                                command=self.dummy_canvas.xview,
                                                **scrollbar_kwargs)
-            self.h_scrollbar.grid(row=1, column=0, sticky="news")
+            self.h_scrollbar.grid(row=2*(1-hscrolltop), column=1, sticky="news")
             self.dummy_canvas.configure(xscrollcommand=self.h_scrollbar.set)
 
         # Bind to the mousewheel scrolling
@@ -162,7 +163,7 @@ class BetterFrame(tk.Frame):
         # Place `self` inside `dummy_canvas`
         self.dummy_canvas.create_window((0, 0), window=self, anchor="nw")
         # Place `dummy_canvas` inside `master_frame`
-        self.dummy_canvas.grid(row=0, column=0, sticky="news")
+        self.dummy_canvas.grid(row=1, column=1, sticky="news")
 
         self.pack = self.master_frame.pack
         self.grid = self.master_frame.grid
