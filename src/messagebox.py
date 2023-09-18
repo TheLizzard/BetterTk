@@ -20,12 +20,18 @@ ICONS = creator.SpritesCache(256, 256>>2, 220)
 class Popup(BetterTk):
     __slots__ = "root", "image", "tk_image"
 
-    def __init__(self, master:tk.Misc, title:str, icon:str=None):
+    def __init__(self, master:tk.Misc, title:str, *, icon:str, center:bool=True,
+                 center_widget:tk.Misc=None) -> Popup:
+        if center_widget is not None:
+            assert center, "No point in passing in center_widget if " \
+                           "center is False"
         super().__init__(master)
         super().title(title)
         self.minimise_button.hide()
         super().resizable(False, False)
         super().protocol("WM_DELETE_WINDOW", self._destroy)
+        super().topmost(True)
+        super().topmost(False)
         self.image:Image.Image = self.get_image(icon)
         self.tk_image = ImageTk.PhotoImage(self.image, master=self)
         self.root.iconphoto(False, self.tk_image)
@@ -35,6 +41,9 @@ class Popup(BetterTk):
             super().grab_set()
         except tk.TclError:
             pass
+        if center:
+            base_widget:tk.Misc = center_widget or self.get_root(master)
+            super().after(1, self.center, base_widget)
 
     def get_image(self, icon_name:str) -> Image.Image:
         icon:Image.Image|None = ICONS[icon_name]
@@ -49,11 +58,28 @@ class Popup(BetterTk):
         super().mainloop()
         return self
 
+    def center(self, based_on:tk.Misc) -> None:
+        super().update_idletasks()
+        x:int = based_on.winfo_rootx() + (based_on.winfo_width() >> 1)
+        y:int = based_on.winfo_rooty() + (based_on.winfo_height() >> 1)
+        x -= super().winfo_width() >> 1
+        y -= super().winfo_height() >> 1
+        super().geometry(f"+{x}+{y-15}")
+
+    def get_root(self, widget:tk.Misc) -> tk.Tk|tk.Toplevel:
+        while True:
+            if isinstance(widget, tk.Tk|tk.Toplevel):
+                return widget
+            assert widget is not None, "InternalError"
+            assert isinstance(widget, tk.Misc), "InternalError"
+            widget:tk.Misc = widget.master
+
 
 class Tell(Popup):
     __slots__ = ()
 
-    def __init__(self, master:tk.Misc, title:str, message:str, icon:str=None):
+    def __init__(self, master:tk.Misc, title:str, message:str, *, icon:str,
+                 center:bool=True, center_widget:tk.Misc=None) -> Tell:
         super().__init__(master, title=title, icon=icon)
         super().bind("<Return>", lambda e: self._destroy())
 
@@ -78,9 +104,11 @@ class Tell(Popup):
 class YesNoQuestion(Popup):
     __slots__ = "result"
 
-    def __init__(self, master:tk.Misc, title:str, message:str, icon:str=None):
+    def __init__(self, master:tk.Misc, title:str, message:str, *, icon:str,
+                 center:bool=True, center_widget:tk.Misc=None) -> YesNoQuestion:
         self.result:bool = None
-        super().__init__(master, title=title, icon=icon)
+        super().__init__(master, title=title, icon=icon, center=center,
+                         center_widget=center_widget)
         super().bind("<Return>", lambda e: self.yes_clicked())
 
         right_frame = tk.Frame(self, **FRAME_KWARGS)
@@ -116,11 +144,11 @@ class YesNoQuestion(Popup):
         return self.result
 
 
-def askyesno(master:tk.Misc, **kwargs) -> bool|None:
-    return YesNoQuestion(master, **kwargs).mainloop().get()
+def askyesno(master:tk.Misc, *args, **kwargs) -> bool|None:
+    return YesNoQuestion(master, *args, **kwargs).mainloop().get()
 
-def tell(master:tk.Misc, **kwargs) -> None:
-    Tell(master, **kwargs).mainloop()
+def tell(master:tk.Misc, *args, **kwargs) -> None:
+    Tell(master, *args, **kwargs).mainloop()
 
 
 if __name__ == "__main__":
@@ -129,12 +157,12 @@ if __name__ == "__main__":
         root.mainloop()
 
     root = tk.Tk()
-    root.withdraw()
+    root.geometry("+170+50")
+    #root.withdraw()
 
     msg:str = 'Are you sure you want to delete "Hi.txt"?'
     result = tell(root, title="Delete file?", message=msg, icon="warning")
     print(result)
 
     msg:str = 'Are you sure you want to delete "Hi.txt"?'
-    result = tell(root, title="Delete file?", message=msg, icon="warning")
-    print(result)
+    tell = Tell(root, title="Delete file?", message=msg, icon="warning")

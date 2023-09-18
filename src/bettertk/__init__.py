@@ -661,8 +661,8 @@ class BetterTk(tk.Frame):
 
     def _change_icon(self, image:Image.Image) -> None:
         if isinstance(image, str):
-            image:Image.Image = Image.open(filename)
-            self._tk_icon_2 = ImageTk.PhotoImage(file=filename, master=self)
+            self._tk_icon_2 = ImageTk.PhotoImage(file=image, master=self)
+            image:Image.Image = Image.open(image)
         elif isinstance(image, Image.Image):
             self._tk_icon_2 = ImageTk.PhotoImage(image, master=self)
         else:

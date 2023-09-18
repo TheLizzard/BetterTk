@@ -355,20 +355,8 @@ class SpritesCache:
 
 
 if __name__ == "__main__":
-    size:int = 256#>>1
-    sprites:dict[str:Image.Image] = init(size, size>>1, 220)
-
-    def toggle_play(event:tk.Event=None) -> None:
-        if button_start.cget("text") == "Pause":
-            button_start.config(text="Play", image=images[1])
-        else:
-            button_start.config(text="Pause", image=images[0])
-
-    def toggle_close(event:tk.Event=None) -> None:
-        if button_close.cget("text") == "Close":
-            button_close.config(text="Restart", image=images[2])
-        else:
-            button_close.config(text="Close", image=images[3])
+    size:int = 256
+    sprites:dict[str:Image.Image] = init(size, size>>1, 220, {"info"})
 
     root = tk.Tk()
     root.geometry("+0+0")

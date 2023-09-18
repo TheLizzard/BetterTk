@@ -239,7 +239,9 @@ class NoTitlebarTk:
         return XOpenDisplay(None)
 
     def cleanup(self) -> None:
-        assert not self._cleanedup, "InternalError"
+        if self._cleanedup:
+            # BetterTk calls self.destroy() twice.
+            return None
         assert self in _display_owners, "InternalError"
         self._cleanedup:bool = True
         _display_owners.remove(self)
