@@ -151,6 +151,12 @@ class TerminalFrame(tk.Frame):
                          **kwargs)
         super().focus_set()
 
+    @property
+    def running(self) -> bool:
+        if not self.started:
+            return False
+        return self.terminal.running
+
     def start(self) -> None:
         tk_wait_for_map(self)
         self.terminal:Terminal = Terminal(into=self)
@@ -194,13 +200,14 @@ class TerminalFrame(tk.Frame):
 class TerminalTk(BetterTk):
     __slots__ = "terminal", "pause_button", "close_button", "sprites", \
                 "running_state", "chk_output", "closing_state", \
-                "running_something", "_iqueue", "cmd_names"
+                "running_something", "_iqueue", "cmd_names", "waiting_pong"
 
     def __init__(self, master:tk.Misc=None, **kwargs) -> TerminalTk:
         self.running_state:tuple[int,int] = (None, None)
         self.chk_output:tuple[int,str] = (None, None)
         self.cmd_names:dict[int:str] = dict()
         self.running_something:bool = False
+        self.waiting_pong:bool = False
         self._iqueue:list[tuple] = []
         super().__init__(master, **kwargs)
         if ICON is not None:
@@ -211,6 +218,10 @@ class TerminalTk(BetterTk):
         self.terminal.pack(side="bottom", fill="both", expand=True)
         self.terminal.start()
         self.handle_msg_loop()
+
+    @property
+    def running(self) -> bool:
+        return self.terminal.running
 
     def cancel_all(self) -> None:
         self._iqueue.clear()
@@ -278,13 +289,20 @@ class TerminalTk(BetterTk):
                 self.handle_msg(*self.terminal.buffer.msg_queue.pop())
         super().after(READ_MSG_RATE, self.handle_msg_loop)
 
+    def send_ping(self, *, wait:bool) -> None:
+        assert wait, "No point in sending ping if you aren't going to wait."
+        self.waiting_pong:bool = True
+        self.send_signal(PING_SIGNAL)
+        super().mainloop()
+
     def handle_msg(self, msg:str, *args) -> None:
         if msg == "STARTED":
             ...
         elif msg == "PING":
             self.terminal.send_signal(PONG_SIGNAL)
         elif msg == "PONG":
-            ...
+            if self.waiting_pong:
+                super().quit()
         elif msg == "ERR":
             if args[0] == "ERR_CMDS_QUEUE_NOT_EMPTY":
                 print("ERR_CMDS_QUEUE_NOT_EMPTY")
@@ -306,8 +324,8 @@ class TerminalTk(BetterTk):
             assert self.running_state[0] == args[0], "SanityCheck"
             self.running_state:tuple[int,int] = args
             self.running_something:bool = False
-            text:str = f" Process Ended [{args[1]}] ".center(80, "#")+"\n"
-            self.terminal.buffer.send_force_print(text)
+            #text:str = f" Process Ended [{args[1]}] ".center(80, "#")+"\n"
+            #self.terminal.buffer.send_force_print(text)
             super().title("TerminalTk")
             self._no_proc_running()
             self.iqueue_next()

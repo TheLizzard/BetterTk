@@ -97,8 +97,10 @@ class BaseTerminal:
             sleep(0.2)
 
     def close(self, signal:bytes=b"KILL") -> None:
+        assert self.running, "Not running"
         if signal is not None:
             self.send_signal(signal)
+        self.running:bool = False
         self.pipe.close()
         self.wait_ended()
 

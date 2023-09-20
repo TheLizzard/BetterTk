@@ -92,8 +92,11 @@ END_REFRESH_RATE:int = 200 # milliseconds checking if term has exited
 
 
 ERR_CMDS_QUEUE_NOT_EMPTY:bytes = b"\x00\x01" # RESTART signal failed
-ERR_NO_LAST_CMD:bytes = b"\x00\x02"         # RESTART signal failed
-ERR_NO_PROC:bytes = b"\x00\x03"             # a proc signal failed
+ERR_NO_LAST_CMD:bytes = b"\x00\x02"          # RESTART signal failed
+ERR_NO_PROC:bytes = b"\x00\x03"              # a proc signal failed
+
+TRUE_PATH:str = "/bin/true"
+FALSE_PATH:str = "/bin/false"
 
 
 class CorruptedSignal(RuntimeError): ...
@@ -187,10 +190,26 @@ class ProcManager:
         assert allisinstance(command, str), "TypeError"
         assert isinstance(string, str), "TypeError"
         print(string, end="", flush=True)
+        if command[0] == "cd":
+            command:tuple[str] = self.cd(command[1:])
         self.proc:Popen = Popen(command, stdin=stdin, stdout=stdout,
                                 stderr=stderr, shell=False)
         self.last_command:tuple[int,tuple[str],str] = (cmd_id, command, string)
         pipe.write(b"RUNNING" + cmd_id.to_bytes(2,"big"))
+
+    def cd(self, args:tuple[str]) -> tuple[str]:
+        if len(args) == 0:
+            print("slave: cd: no argument")
+        elif len(args) == 1:
+            try:
+                os.chdir(args[0])
+                return (TRUE_PATH,)
+            except OSError as error:
+                print(error)
+                pass
+        elif len(args) >= 3:
+            print("slave: cd: too many arguments")
+        return (FALSE_PATH,)
 
     def cancel_all(self) -> None:
         self.cmds_queue.clear()

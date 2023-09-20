@@ -399,7 +399,7 @@ class BetterTk(tk.Frame):
         for button in self.buttons:
             button.config(activebackground=bg, activeforeground=fg)
 
-        if self.root.focus_displayof() is None:
+        if self.focus_displayof() is None:
             self.window_unfocused()
         else:
             self.window_focused()
@@ -417,6 +417,13 @@ class BetterTk(tk.Frame):
             super().bind_all("<Control-W>", self.maybe_destroy)
 
         super().focus_set()
+
+    def focus_displayof(self) -> tk.Misc|None:
+        # Bug: https://github.com/python/cpython/issues/88758
+        try:
+            return self.root.focus_displayof()
+        except KeyError:
+            return self
 
     def fullscreen(self) -> None:
         self.root.fullscreen()
@@ -521,13 +528,13 @@ class BetterTk(tk.Frame):
         self.geometry(f"+{newx}+{newy}")
 
     def window_focused(self, event:tk.Event=None) -> None:
-        if super().focus_displayof() is None:
+        if self.focus_displayof() is None:
             return None
         self.change_titlebar_bg(self.settings.ACTIVE_TITLEBAR_BG)
         self.change_titlebar_fg(self.settings.ACTIVE_TITLEBAR_FG)
 
     def window_unfocused(self, event:tk.Event=None) -> None:
-        if super().focus_displayof() is not None:
+        if self.focus_displayof() is not None:
             return None
         self.change_titlebar_bg(self.settings.INACTIVE_TITLEBAR_BG)
         self.change_titlebar_fg(self.settings.INACTIVE_TITLEBAR_FG)
@@ -577,7 +584,7 @@ class BetterTk(tk.Frame):
     def custom_buttons(self, value:dict()) -> None:
         self.custom_button = CustomButton(self.buttons_frame, self, **value)
         self.buttons.append(self.custom_button)
-        if self.root.focus_displayof() is None:
+        if self.focus_displayof() is None:
             self.window_unfocused()
         else:
             self.window_focused()

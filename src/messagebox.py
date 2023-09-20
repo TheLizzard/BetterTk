@@ -60,15 +60,15 @@ class Popup(BetterTk):
 
     def center(self, based_on:tk.Misc) -> None:
         super().update_idletasks()
-        x:int = based_on.winfo_rootx() + (based_on.winfo_width() >> 1)
-        y:int = based_on.winfo_rooty() + (based_on.winfo_height() >> 1)
-        x -= super().winfo_width() >> 1
-        y -= super().winfo_height() >> 1
-        super().geometry(f"+{x}+{y-15}")
+        x:int = based_on.winfo_rootx() + based_on.winfo_width()//2
+        y:int = based_on.winfo_rooty() + based_on.winfo_height()//2
+        x -= super().winfo_width()//2
+        y -= super().winfo_height()//2
+        super().geometry(f"+{x}+{y}")
 
     def get_root(self, widget:tk.Misc) -> tk.Tk|tk.Toplevel:
         while True:
-            if isinstance(widget, tk.Tk|tk.Toplevel):
+            if isinstance(widget, tk.Tk|tk.Toplevel|BetterTk):
                 return widget
             assert widget is not None, "InternalError"
             assert isinstance(widget, tk.Misc), "InternalError"
@@ -80,7 +80,8 @@ class Tell(Popup):
 
     def __init__(self, master:tk.Misc, title:str, message:str, *, icon:str,
                  center:bool=True, center_widget:tk.Misc=None) -> Tell:
-        super().__init__(master, title=title, icon=icon)
+        super().__init__(master, title=title, icon=icon, center=center,
+                         center_widget=center_widget)
         super().bind("<Return>", lambda e: self._destroy())
 
         left_frame = tk.Frame(self, **FRAME_KWARGS)
@@ -147,8 +148,10 @@ class YesNoQuestion(Popup):
 def askyesno(master:tk.Misc, *args, **kwargs) -> bool|None:
     return YesNoQuestion(master, *args, **kwargs).mainloop().get()
 
-def tell(master:tk.Misc, *args, **kwargs) -> None:
-    Tell(master, *args, **kwargs).mainloop()
+def tell(master:tk.Misc, *args, block:bool=True, **kwargs) -> None:
+    tell:Tell = Tell(master, *args, **kwargs)
+    if block:
+        tell.mainloop()
 
 
 if __name__ == "__main__":

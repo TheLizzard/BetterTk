@@ -44,12 +44,15 @@ class TabNotch(tk.Canvas):
     def rename(self, text:str) -> None:
         if self.text == text:
             return None
+        self.text:str = text
         super().itemconfig(self.text_id, text=text)
         x1, y1, x2, y2 = super().bbox(self.text_id)
         width:int = x2-x1
         height:int = y2-y1
         super().moveto(self.text_id, self.PADX, height/2)
         super().config(width=width+2*self.PADX, height=2*height)
+        if self.rrect_id is not None:
+            self.tell_focused()
 
     def tell_focused(self) -> None:
         if self.rrect_id is not None:
@@ -57,9 +60,9 @@ class TabNotch(tk.Canvas):
         x1, y1, x2, y2 = super().bbox(self.text_id)
         width:int = x2-x1
         height:int = y2-y1
-        points:tuple[int] = (0, 0, width+2*self.PADX, 10*height)
+        points:tuple[int] = (0, 0, width+2*self.PADX, 3*height)
         self.rrect_id:int = super().create_round_rectangle(*points,
-                                                           radius=height,
+                                                           radius=25,
                                                            fill="black")
         super().tag_lower(self.rrect_id)
 
@@ -71,8 +74,8 @@ class TabNotch(tk.Canvas):
 class TabNotches(BetterFrame):
     __slots__ = "add_notch", "length", "notebook"
 
-    def __init__(self, notebook:NoteBook) -> TabNotches:
-        self.notebook:NoteBook = notebook
+    def __init__(self, notebook:Notebook) -> TabNotches:
+        self.notebook:Notebook = notebook
         super().__init__(notebook, bg=NOTCH_BG, hscroll=True, vscroll=False,
                          HScrollBarClass=BetterScrollBarHorizontal,
                          hscrolltop=True, scrollbar_kwargs=dict(width=4))
@@ -101,19 +104,22 @@ class TabNotches(BetterFrame):
             notch.page.close()
 
 
-class NoteBookPage:
+class NotebookPage:
     __slots__ = "notebook", "frame", "notch"
 
-    def __init__(self, notebook:NoteBook, frame:tk.Frame, notch:TabNotch):
-        self.notebook:NoteBook = notebook
+    def __init__(self, notebook:Notebook, frame:tk.Frame, notch:TabNotch):
+        self.notebook:Notebook = notebook
         self.notch:TabNotch = notch
         self.frame:tk.Misc = frame
 
-    def add_frame(self, frame:tk.Frame) -> NoteBookPage:
+    def add_frame(self, frame:tk.Frame) -> NotebookPage:
         frame.pack(in_=self.frame, fill="both", expand=True)
+        #frame.bind("<Control-Key><Tab>", self.notebook.switch_next_tab)
+        frame.bind("<Control-Tab>", self.notebook.switch_next_tab)
+        frame.bind("<Control-ISO_Left_Tab>", self.notebook.switch_prev_tab)
         return self
 
-    def rename(self, title:str) -> NoteBookPage:
+    def rename(self, title:str) -> NotebookPage:
         self.notch.rename(title)
         return self
 
@@ -124,18 +130,18 @@ class NoteBookPage:
         self.notch.destroy()
         self.frame.destroy()
 
-    def focus(self) -> NoteBookPage:
+    def focus(self) -> NotebookPage:
         self.notebook._tab_switch_to(self)
         return self
 
 
-class NoteBook(tk.Frame):
+class Notebook(tk.Frame):
     __slots__ = "pages", "next_id", "curr_page", "notches", "bottom", \
                 "on_try_close"
 
-    def __init__(self, master:tk.Misc) -> NoteBook:
-        self.pages:list[NoteBookPage] = []
-        self.curr_page:NoteBookPage = None
+    def __init__(self, master:tk.Misc) -> Notebook:
+        self.pages:list[NotebookPage] = []
+        self.curr_page:NotebookPage = None
         self.on_try_close = None
 
         super().__init__(master, **WIDGET_KWARGS, bg="black")
@@ -144,19 +150,16 @@ class NoteBook(tk.Frame):
         self.bottom:tk.Frame = tk.Frame(self, **WIDGET_KWARGS, bg="black")
         self.bottom.pack(fill="both", expand=True)
 
-        super().bind_all("<Control-Key><Tab>", self.switch_next_tab)
-        super().bind_all("<Control-ISO_Left_Tab>", self.switch_prev_tab)
-
-    def tab_create(self) -> NoteBookPage:
+    def tab_create(self) -> NotebookPage:
         notch:TabNotch = self.notches.add()
         notch.rename("Untitled")
         frame:tk.Frame = tk.Frame(self.bottom, **WIDGET_KWARGS, bg="black")
-        page:NoteBookPage = NoteBookPage(self, frame=frame, notch=notch)
-        notch.page:NoteBookPage = page
+        page:NotebookPage = NotebookPage(self, frame=frame, notch=notch)
+        notch.page:NotebookPage = page
         self.pages.append(page)
         return page
 
-    def _tab_switch_to(self, page:NoteBookPage) -> None:
+    def _tab_switch_to(self, page:NotebookPage) -> None:
         if page == self.curr_page:
             return None
         if self.curr_page is not None:
@@ -165,22 +168,22 @@ class NoteBook(tk.Frame):
         if page is not None:
             page.frame.pack(fill="both", expand=True)
             page.notch.tell_focused()
-        self.curr_page:NoteBookPage = page
+        self.curr_page:NotebookPage = page
         super().event_generate("<<Tab-Switched>>")
 
     def switch_prev_tab(self, event:tk.Event=None) -> None:
-        page:NoteBookPage = self._switch_next_prev_tab(strides=-1, default=-1)
+        page:NotebookPage = self._switch_next_prev_tab(strides=-1, default=-1)
         if page == self.curr_page:
-            page:NoteBookPage = None
+            page:NotebookPage = None
         self._tab_switch_to(page)
 
     def switch_next_tab(self, event:tk.Event=None) -> None:
-        page:NoteBookPage = self._switch_next_prev_tab(strides=+1, default=0)
+        page:NotebookPage = self._switch_next_prev_tab(strides=+1, default=0)
         if page == self.curr_page:
-            page:NoteBookPage = None
+            page:NotebookPage = None
         self._tab_switch_to(page)
 
-    def _switch_next_prev_tab(self, strides:int, default:int) -> NoteBookPage:
+    def _switch_next_prev_tab(self, strides:int, default:int) -> NotebookPage:
         if self.curr_page is None:
             if len(self.pages) == 0:
                 return None
@@ -189,7 +192,7 @@ class NoteBook(tk.Frame):
             idx:int = self.pages.index(self.curr_page) + strides
             return self.pages[idx%len(self.pages)]
 
-    def tab_destroy(self, page:NoteBookPage) -> None:
+    def tab_destroy(self, page:NotebookPage) -> None:
         if self.on_try_close is not None:
             res:bool = self.on_try_close(page)
             if res:
@@ -229,7 +232,7 @@ if __name__ == "__main__":
                     return False
 
     root = tk.Tk()
-    notebook = NoteBook(root)
+    notebook = Notebook(root)
     notebook.pack(fill="both", expand=True)
     notebook.on_try_close = on_try_close
 
