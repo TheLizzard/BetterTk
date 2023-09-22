@@ -133,3 +133,4 @@ dmypy.json
 src/bettertk/flickering_test.py
 src/terminaltk/sprites/copyrighted
 src/terminaltk/pty terminal/test.cpp
+_src/
