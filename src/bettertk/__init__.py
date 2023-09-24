@@ -320,13 +320,15 @@ class BetterTk(tk.Frame):
             hide() => None
     """
     def __init__(self, master=None, settings:BetterTkSettings=DEFAULT_SETTINGS,
-                 **kwargs):
+                 withdraw:bool=False, **kwargs):
         self.settings = settings
         self.settings.started_using()
         self._allow_ctrl_w:bool = True
         self._overrideredirect:bool = False
 
         self.root = NoTitlebarTk(master, **kwargs)
+        if withdraw:
+            self.root.withdraw()
         self.protocols = {"WM_DELETE_WINDOW": self.destroy}
         self.root.protocol("WM_DELETE_WINDOW", self.generate_destroy)
         self.root.minsize(MIN_WIDTH, MIN_HEIGHT)
@@ -463,6 +465,10 @@ class BetterTk(tk.Frame):
 
     def maybe_destroy(self, event:tk.Event) -> None:
         widget:tk.Misc = event.widget
+        if isinstance(widget, str):
+            # If the widget was already destroyed by something
+            # Don't know when/why this happens?
+            return None
         while (not isinstance(widget, BetterTk)) and (widget.master is not None):
             widget:tk.Misc = widget.master
 
