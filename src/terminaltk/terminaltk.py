@@ -3,16 +3,15 @@ from threading import Thread, Lock
 from PIL import ImageTk
 from time import sleep
 import tkinter as tk
+import sys
 import os
 
 try:
-    from .terminal import Terminal, encode_run, encode_print
-    from .sprites.creator import init as create_sprites
     from ..bettertk import BetterTk
 except ImportError:
-    from terminal import Terminal, encode_run, encode_print
-    from sprites.creator import init as create_sprites
     from bettertk import BetterTk
+from .terminal import Terminal, encode_run, encode_print
+from .sprites.creator import init as create_sprites
 
 
 CHUNK_SIZE:int = 5*1024
@@ -217,7 +216,7 @@ class TerminalTk(BetterTk):
         self._iqueue:list[tuple] = []
         super().__init__(master, **kwargs)
         if ICON is not None:
-            super().iconphoto(True, ICON)
+            super().iconphoto(False, ICON)
         super().title("TerminalTk")
         self.setup_buttons()
         self.terminal:TerminalFrame = TerminalFrame(self, width=815, height=460)
