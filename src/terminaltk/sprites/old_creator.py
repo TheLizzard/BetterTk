@@ -5,20 +5,18 @@ from time import perf_counter
 import tkinter as tk
 
 
-Colour:type = tuple[int,int,int]
-
 ε:float = 0.01
 DEBUG:bool = False
-BLACK:Colour = (0,0,0)
-WHITE:Colour = (255,255,255)
-RED:Colour = (255,0,0)
-GREEN:Colour = (0,255,0)
-BLUE:Colour = (0,0,255)
-CYAN:Colour = (0,255,255)
-DGREEN:Colour = (0,180,0)
-YELLOW:Colour = (255,255,0)
-ORANGE:Colour = (255,165,0)
-DYELLOW:Colour = (252,225,0)
+BLACK:tuple[int,int,int] = (0,0,0)
+WHITE:tuple[int,int,int] = (255,255,255)
+RED:tuple[int,int,int] = (255,0,0)
+GREEN:tuple[int,int,int] = (0,255,0)
+BLUE:tuple[int,int,int] = (0,0,255)
+CYAN:tuple[int,int,int] = (0,256,256)
+DGREEN:tuple[int,int,int] = (0,180,0)
+YELLOW:tuple[int,int,int] = (255,255,0)
+ORANGE:tuple[int,int,int] = (255,165,0)
+DYELLOW:tuple[int,int,int] = (252,225,0)
 sin:Function[float,float] = lambda deg: _sin(deg/180*pi)
 cos:Function[float,float] = lambda deg: _cos(deg/180*pi)
 tan:Function[float,float] = lambda deg: _tan(deg/180*pi)
@@ -26,6 +24,10 @@ atan:Function[float,float] = lambda x: _atan(x)/pi*180
 sq:Function[float,float] = lambda x: x*x
 sign:Function[float,float] = lambda x: (2*(x>0)-1)*(x!=0)
 line_gradient:Function = lambda x1,y1,x2,y2: div(y2-y1, x2-x1)
+is_bellow_line = lambda p1,g,p2: p2[1]+g*(p1[0]-p2[0]) < p1[1]
+is_above_line = lambda p1,g,p2: not is_bellow_line(p1,g,p2)
+is_right_line = lambda p1,g,p2: p1[0]>p2[0]
+is_left_line = lambda p1,g,p2: not is_right_line(p1,g,p2)
 div:Function[float,float,float] = lambda a,b: (a/ε if b == 0 else a/b)
 def fatan(x:float, y:float) -> float:
     assert not (x == y == 0), "Fatan of (0,0) doesn't exist"
@@ -34,78 +36,43 @@ def fatan(x:float, y:float) -> float:
     if x < 0:
         return atan(y/x)+180
     return atan(y/x)%360
-map_int = lambda *a:map(int, a)
 
 
-# Taken from: https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
-def _get_line_low(result, x0, y0, x1, y1) -> None:
-    dx = x1 - x0
-    dy = y1 - y0
-    yi = 1
-    if dy < 0:
-        yi = -1
-        dy = -dy
-    D = (2 * dy) - dx
-    y = y0
-    for x in range(x0, x1+1):
-        result[y] = x
-        if D > 0:
-            y = y + yi
-            D = D + (2 * (dy - dx))
-        else:
-            D = D + 2*dy
+def triangle_order_left(p1, p2) -> ((int,int), (int,int)):
+    # Order right, prefer top
+    if p1[0] < p2[0]:
+        return p1, p2
+    if p2[0] < p1[0]:
+        return p2, p1
+    if p1[1] < p2[1]:
+        return p1, p2
+    assert p1[1] > p2[1], "2 Points are the same"
+    return p2, p1
 
-def _get_line_high(result, x0, y0, x1, y1) -> None:
-    dx = x1 - x0
-    dy = y1 - y0
-    xi = 1
-    if dx < 0:
-        xi = -1
-        dx = -dx
-    D = (2 * dx) - dy
-    x = x0
-    for y in range(y0, y1+1):
-        result[y] = x
-        if D > 0:
-            x = x + xi
-            D = D + (2 * (dx - dy))
-        else:
-            D = D + 2*dx
+def triangle_order_top(p1, p2) -> ((int,int), (int,int)):
+    # Oder top, prefer <useless>
+    if p1[1] < p2[1]:
+        return p1, p2
+    if p1[1] > p2[1]:
+        return p2, p1
+    if p1[0] < p2[0]:
+        return p1, p2
+    assert p1[0] > p2[0], "2 Points are the same"
+    return p2, p1
 
-def _get_line(result, x0, y0, x1, y1) -> None:
-    if abs(y1 - y0) < abs(x1 - x0):
-        if x0 > x1:
-            _get_line_low(result, x1, y1, x0, y0)
-        else:
-            _get_line_low(result, x0, y0, x1, y1)
-    else:
-        if y0 > y1:
-            _get_line_high(result, x1, y1, x0, y0)
-        else:
-            _get_line_high(result, x0, y0, x1, y1)
-
-
-# Taken from: https://www.youtube.com/watch?v=hpiILbMkF9w
-def _get_circle(lows, highs, cx, cy, r) -> None:
-    assert isinstance(r, int), "TypeError"
-    assert isinstance(cx, int), "TypeError"
-    assert isinstance(cy, int), "TypeError"
-    x, y = 0, -r
-    p = 1 - 4*r
-    while x < -y:
-        if p > 0:
-            y += 1
-            p += 8*y
-        p += 8*x + 4
-        lows[cy+y] = cx-x
-        lows[cy-y] = cx-x
-        lows[cy+x] = cx-y
-        lows[cy-x] = cx-y
-        highs[cy+y] = cx+x
-        highs[cy-y] = cx+x
-        highs[cy+x] = cx+y
-        highs[cy-x] = cx+y
-        x += 1
+def triangle_order(p1, p2, p3) -> tuple[int*6]:
+    p1, p2 = triangle_order_left(p1, p2)
+    p1, p3 = triangle_order_left(p1, p3)
+    p2, p3 = triangle_order_top(p2, p3)
+    if p1[0] == p2[0]:
+        if p3[0] > p2[0]:
+            p2, p3 = p3, p2
+    elif p1[0] == p3[0]:
+        if p2[0] < p3[0]:
+            p2, p3 = p3, p2
+    elif line_gradient(*p1, *p2) > line_gradient(*p1, *p3):
+        p2, p3 = p3, p2
+    return (p1, p2, p3)
 
 
 class DrawImage:
@@ -123,7 +90,10 @@ class DrawImage:
         img:Image.Image = img.resize((show_size,show_size), Image.LANCZOS)
         return img
 
-    def draw_circumference(self, pc, r1, r2, d, Δd, *, colour=WHITE, alpha=255):
+    def draw_circle(self, pc, r, **kwargs) -> None:
+        self.draw_circumference(pc, 0, r, 0, 360, **kwargs)
+
+    def draw_circumference(self, pc, r1, r2, d, Δd, *, colour=WHITE, alpha=256):
         assert -360 <= d <= 360, "ValueError"
         assert 0 < Δd <= 360, "ValueError"
         assert r1 < r2, "ValueError"
@@ -146,12 +116,12 @@ class DrawImage:
                     continue
                 self.pix[i,j] = colour+(alpha,)
 
-    def draw_rectangle(self, x1, y1, x2, y2, *, colour=WHITE, alpha=255) -> None:
+    def draw_rectangle(self, x1, y1, x2, y2, *, colour=WHITE, alpha=256) -> None:
         for i in range(int(x1), int(x2+1)):
             for j in range(int(y1), int(y2+1)):
                 self.pix[i,j] = colour+(alpha,)
 
-    def draw_line(self, p1, p2, w, *, colour=WHITE, alpha=255) -> None:
+    def draw_line(self, p1, p2, w, *, colour=WHITE, alpha=256) -> None:
         (x15,y15), (x35,y35) = p1, p2
         theta = fatan(x35-x15, y35-y15)
         x1, x2 = x15+w/2*sin(theta), x15-w/2*sin(theta)
@@ -163,36 +133,48 @@ class DrawImage:
         # self.draw_polygon((x1,y1), (x2,y2), (x4,y4), (x3,y3), colour=colour,
         #                   alpha=alpha)
 
-    def draw_rounded_line(self, p1, p2, w, *, colour=WHITE, alpha=255):
+    def draw_rounded_line(self, p1, p2, w, *, colour=WHITE, alpha=256):
         (x1,y1), (x2, y2) = p1, p2
         self.draw_line((x1,y1), (x2,y2), w, colour=colour, alpha=alpha)
         self.draw_circle((x1,y1), w/2, colour=colour, alpha=alpha)
         self.draw_circle((x2,y2), w/2, colour=colour, alpha=alpha)
 
-    def draw_triangle(self, p1, p2, p3, *, colour=WHITE, alpha=255):
-        points1 = [-1]*self.size
-        points2 = points1.copy()
-        points3 = points1.copy()
-        _get_line(points1, *map_int(*p1, *p2))
-        _get_line(points2, *map_int(*p2, *p3))
-        _get_line(points3, *map_int(*p3, *p1))
-        self._draw_between_xs(points1, points2, points3, colour=colour,
-                              alpha=alpha)
+    def draw_triangle(self, p1, p2, p3, *, colour=WHITE, alpha=256):
+        (x1,y1), (x2,y2), (x3,y3) = triangle_order(p1, p2, p3)
+        g1:float = line_gradient(x1, y1, x2, y2)
+        g2:float = line_gradient(x3, y3, x2, y2)
+        g3:float = line_gradient(x1, y1, x3, y3)
+        for i in range(int(min(x1,x2,x3)), int(max(x1,x2,x3)+1)):
+            for j in range(int(min(y1,y2,y3)), int(max(y1,y2,y3)+1)):
+                # Bellow[p1,p2]
+                if not is_bellow_line((i,j), g1, (x1,y1)):
+                    continue
+                # Bellow[p2,p3] if x2 < x3 else above[p2,p3]
+                if x2 < x3:
+                    if not is_bellow_line((i,j), g2, (x2,y2)):
+                        continue
+                elif x2 == x3:
+                    if not is_left_line((i,j), g3, (x2,y2)):
+                        continue
+                else:
+                    if not is_above_line((i,j), g2, (x2,y2)):
+                        continue
+                # Above[p1,p3] if x1 < x3 else bellow[p1,p3]
+                if x1 < x3:
+                    if not is_above_line((i,j), g3, (x3,y3)):
+                        continue
+                elif x1 == x3:
+                    if not is_right_line((i,j), g3, (x3,y3)):
+                        continue
+                else:
+                    if not is_bellow_line((i,j), g3, (x3,y3)):
+                        continue
+                self.pix[i,j] = colour+(alpha,)
+        #self.draw_circle((x1,y1), 3, colour=RED)
+        #self.draw_circle((x2,y2), 3, colour=GREEN)
+        #self.draw_circle((x3,y3), 3, colour=BLUE)
 
-    def draw_circle(self, pc, r, *, colour=WHITE, alpha=255) -> None:
-        lows, highs = [-1]*self.size, [-1]*self.size
-        _get_circle(lows, highs, *map_int(*pc), int(r))
-        self._draw_between_xs(lows, highs, colour=colour, alpha=alpha)
-
-    def _draw_between_xs(self, *points, colour=WHITE, alpha=255) -> None:
-        for y, xs in enumerate(zip(*points, strict=True)):
-            xs = list(xs)
-            while -1 in xs: xs.remove(-1)
-            if xs:
-                for x in range(min(xs), max(xs)+1):
-                    self.pix[x,y] = colour+(alpha,)
-
-    def draw_polygon(self, *ps:tuple[Point], colour=WHITE, alpha=255):
+    def draw_polygon(self, *ps:tuple[Point], colour=WHITE, alpha=256):
         first = lambda items: items[0]
         second = lambda items: items[1]
         minx, maxx = min(map(first, ps)), max(map(first, ps))
@@ -296,12 +278,9 @@ def draw_settings(n, r1, r2, ir1, ir2, or1, or2, br, size, reverse=False) -> Dra
     r1, r2, ir1, ir2 = r1/256*size, r2/256*size, ir1/256*size, ir2/256*size
     or1, or2, br = or1/256*size, or2/256*size, br/256*size
     image:DrawImage = DrawImage(size)
-    centre = (size>>1,size>>1)
-    image.draw_circle(centre, br, colour=WHITE)
-    image.draw_circle(centre, or2, colour=BLACK)
-    image.draw_circle(centre, or1, colour=WHITE)
-    image.draw_circle(centre, ir2, colour=BLACK)
-    image.draw_circle(centre, ir1, colour=WHITE)
+    image.draw_circle((size>>1,size>>1), br, colour=WHITE)
+    image.draw_circumference((size>>1,size>>1), or1, or2, 0, 360, colour=BLACK)
+    image.draw_circumference((size>>1,size>>1), ir1, ir2, 0, 360, colour=BLACK)
     for i in range(n):
         if reverse:
             deg = (360/n*i+90)%360
@@ -309,10 +288,9 @@ def draw_settings(n, r1, r2, ir1, ir2, or1, or2, br, size, reverse=False) -> Dra
             deg = (360/n*i-90)%360
         x, y = or2*cos(deg)+(size>>1), or2*sin(deg)+(size>>1)
         image.draw_circle((x,y), r1, colour=WHITE)
-        image.draw_circle((x,y), r2, colour=BLACK)
-        image.draw_circle((x,y), r1, colour=WHITE)
-    image.draw_circumference(centre, or2, br, 0, 360, colour=WHITE)
-    image.draw_circumference(centre, br, br*2, 0, 360, colour=BLACK, alpha=0)
+        image.draw_circumference((x,y), r1, r2, 0, 360, colour=BLACK)
+    image.draw_circumference((size>>1,size>>1), or2, br, 0, 360, colour=WHITE)
+    image.draw_circumference((size>>1,size>>1), br, br*2, 0, 360, colour=BLACK, alpha=0)
     return image
 
 def draw_stop(y1, y2, w, r, br, size) -> DrawImage:

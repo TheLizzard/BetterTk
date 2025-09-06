@@ -135,3 +135,4 @@ src/terminaltk/sprites/copyrighted/
 src/terminaltk/pty terminal/test.cpp
 src/terminaltk/pty terminal/old/
 _src/
+src/terminaltk/err_tb.txt

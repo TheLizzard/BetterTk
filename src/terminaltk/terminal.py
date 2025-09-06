@@ -1,20 +1,25 @@
 from __future__ import annotations
+from threading import Thread, Event as _Event
+from time import sleep, perf_counter
 from subprocess import Popen, PIPE
-from threading import Thread
-from time import sleep
+from signal import SIGTERM
 import sys
 import os
 
 try:
-    from ..bettertk.get_os import IS_WINDOWS, IS_UNIX
+    from signal import SIGKILL
 except ImportError:
-    from bettertk.get_os import IS_WINDOWS, IS_UNIX
-from .piper import TmpPipePair
+    SIGKILL = None
+
+try:
+    from .ipc import IPC, Event, pid_exists, SELF_PID, SIGUSR2, close_all_ipcs
+except ImportError:
+    from ipc import IPC, Event, pid_exists, SELF_PID, SIGUSR2, close_all_ipcs
+from bettertk import IS_WINDOWS, IS_UNIX
 
 
 SLAVE_PATH:str = os.path.join(os.path.dirname(__file__), "slave.py")
-PING_SIGNAL:bytes = b"="
-PONG_SIGNAL:bytes = b"#"
+SLAVE_CMD:str = f'{sys.executable} "{SLAVE_PATH}" "{{}}" {{}}'
 
 
 if IS_WINDOWS:
@@ -53,161 +58,230 @@ elif IS_UNIX:
                        # f"xterm*scrollbar.thumb: {THUMB_SPRITE}",
                      )
     XTERM_ARGS:str = "-b 0 -bw 0 -bc +ai -bg black -fg white -fa Monospace " \
-                     "-fs 12 -cu -sb -rightbar -sl 100000 "
+                     "-fs 12 -cu -sb -rightbar -sl 100000 -ti 340 "
     for XTERM_XRM in XTERM_XRMS:
         XTERM_ARGS += f"-xrm 'xterm*{XTERM_XRM}' "
-    XTERM_ARGS += f'-e {sys.executable} "{SLAVE_PATH}" "{{}}" "{{}}"'
-    KONSOLE_ARGS = f'-e {sys.executable} "{SLAVE_PATH}" "{{}}" "{{}}"'
+    XTERM_ARGS:str = XTERM_ARGS.removesuffix(" ")
 else:
     ...
 
 
-class BaseTerminal:
-    """
-    Inherit from this base class overriding the `start` method and
-      implementing the optional `resize` method.
-    The implementation of the `start` method should call `self.run`.
-    If the `resize` method is implemented, it should tell the slave
-      terminal to resize itself to fit the width/height passed in.
-    If the `resize` method isn't implemented, the terminal will assume that
-      it can't be resized.
-    """
+def timeout(timeout:float, interval:float, check_exit:Callable[bool]) -> bool:
+    start:float = perf_counter()
+    while perf_counter()-start < timeout:
+        if check_exit():
+            return False
+        sleep(interval)
+    return True
 
-    __slots__ = "proc", "pipe", "running", "resizable"
+def invert(func:Callable) -> Callable:
+    def inverted(*args:tuple, **kwargs:dict) -> bool:
+        return not func(*args, **kwargs)
+    return inverted
+
+def kill_proc(send_signal:Callable[int,None], is_alive:Callable[bool]) -> None:
+    send_signal(SIGTERM)
+    if timeout(1, 0.05, invert(is_alive)): # 1 sec for cleanup before SIGKILL
+        if SIGKILL is not None:
+            send_signal(SIGKILL)
+
+
+TERMINAL_IPC:IPC = IPC("terminaltk", sig=SIGUSR2)
+
+
+class BaseTerminal:
+    __slots__ = "proc", "_running", "resizable", "ipc", "slave_pid", \
+                "_ready_event", "_bindings", "sep_window"
 
     def __init__(self, *, into:int=None) -> None:
-        self.running:bool = False
+        self.sep_window:bool = None
+        self._bindings:dict = {}
+        self.ipc:IPC = TERMINAL_IPC
+        self.ipc.find_where("others")
+        self.slave_pid:str = None
+        # Set up vars
         self.resizable:bool = hasattr(self, "resize")
-        self.pipe:TmpPipePair = TmpPipePair.from_tmp()
-        self.start(*self.pipe.reverse(), into=into)
-        assert self.running, "You must call \"self.run(command, env=env)\" " \
+        self._running:bool = False
+        # Start and wait until ready
+        self._ready_event:_Event = _Event()
+        self.bind("ready", self._ready)
+        self.start(into=into)
+        assert self.sep_window is not None, "Set `sep_window` please"
+        assert self._running, "You must call \"self.run(command, env=env)\" " \
                              'inside "self.start"'
+        self._ready_event.wait()
+        Thread(target=self.close_on_dead_slave, daemon=True).start()
 
-    def cancel_all(self) -> None:
-        self.send_signal(b"CANCEL_ALL")
+    def _ready(self, event:Event) -> None:
+        self.slave_pid:str = event._from
+        self._ready_event.set()
+        self.unbind("ready", self._ready)
+
+    def send_event(self, event:str, *, data:object=None) -> None:
+        self.ipc.event_generate(event, where=self.slave_pid, data=data)
+    send = send_event
+
+    def bind(self, event:str, handler:Callable[Event,None], **kwargs) -> None:
+        # Call handler iff it's from the correct pid or event is ready
+        def new_handler(event:Event) -> None:
+            if (event._from == self.slave_pid) or (event.type == "ready"):
+                handler(event)
+        # Add new_handler to binding mapping
+        if (event,handler) in self._bindings:
+            raise RuntimeError("Can't bind the same function twice to " \
+                               "same event. Also it's useless??")
+        self._bindings[(event,handler)] = new_handler
+        # Actual binding
+        self.ipc.bind(event, new_handler, **kwargs)
+
+    def unbind(self, event:str, handler:Callable) -> None:
+        self.ipc.unbind(event, self._bindings[(event,handler)])
+        self._bindings.pop((event,handler))
+
+    @staticmethod
+    def _is_abandoned(fs:Filesystem, name:str) -> bool:
+        filename:str = fs.join(name, "owner_pid")
+        if not fs.exists(filename):
+            return False
+        with fs.open(filename, "rb") as file:
+            try:
+                pid:int = int(file.read().decode("utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                return False
+        return not pid_exists(pid)
 
     def run(self, command:str, *, env:dict[str,str]=os.environ) -> None:
+        slave_cmd:str = SLAVE_CMD.format(self.ipc.name, SELF_PID)
+        command:str = self.str_rreplace_once(command, "%command%", slave_cmd)
         self.proc:Popen = Popen(command, env=env, shell=True, stdout=PIPE,
                                 stderr=PIPE)
-        self.pipe.start()
-        self.running:bool = True
+        self._running:bool = True
+        def is_ready() -> bool:
+            return (self.slave_pid is not None) or \
+                   (self.proc.poll() is not None)
+        if timeout(2, 0.05, is_ready):
+            raise RuntimeError("Slave didn't report its pid")
+        if self.proc.poll() is not None:
+            raise RuntimeError("Xterm closed too quickly. Do you have it " \
+                               "installed? If you do, you might have a " \
+                               "problem with its installation.")
 
-    def wait_ended(self) -> None:
-        while self.proc.poll() is None:
-            sleep(0.2)
+    def close(self) -> None:
+        if self.running():
+            self.send("exit")
+        self.proc.wait()
 
-    def close(self, signal:bytes=b"KILL") -> None:
-        assert self.running, "Not running"
-        if signal is not None:
-            self.send_signal(signal)
-        self.running:bool = False
-        self.pipe.close()
-        self.wait_ended()
+    def close_on_dead_slave(self) -> None:
+        self.proc.wait()
+        while self._bindings:
+            event, handler = next(iter(self._bindings.keys()))
+            self.unbind(event, handler)
 
-    def send_signal(self, signal:bytes) -> None:
-        self.pipe.write(signal)
+    def running(self) -> bool:
+        return self.proc.poll() is None
 
-    def ended(self) -> bool:
-        return self.proc.poll() is not None
+    def clear(self) -> None:
+        self.send("print", data="\r\x1b[2J\x1b[3J\x1b[H\x1bc")
 
-    def start(self, slave2master:str, master2slave:str, *, into:int=None):
+    def send_signal(self, signal:int) -> None:
+        self.send("signal", data=signal)
+
+    @staticmethod
+    def str_rreplace_once(string:str, find:str, replace:str) -> str:
+        return string.replace(find, replace)
+
+    def start(self, *, into:int=None):
         raise NotImplementedError("Override this method, making sure you " \
                                   "call `self.run(command, env=env)` at " \
-                                  "the end")
+                                  "the end. Also please set `self.sep_window`" \
+                                  "to a boolean.")
 
 
 class XTermTerminal(BaseTerminal):
     __slots__ = ()
 
-    def start(self, slave2master:str, master2slave:str, *, into:tk.Misc=None):
-        args:str = XTERM_ARGS.format(slave2master, master2slave)
-        if into is None:
-            command:str = f"xterm {args}"
-        else:
-            # into.config(takefocus=True)
-            # into.focus_set()
-            command:str = f"xterm -into {into.winfo_id()} {args}"
+    def start(self, *, into:tk.Misc=None) -> None:
+        self.sep_window:bool = False
+        into_arg:str = ""
+        if into is not None:
+            into_arg:str = f"-into {into.winfo_id()}"
+        command:str = f"xterm {into_arg} {XTERM_ARGS} -e %command%"
         self.run(command, env=os.environ|dict(force_color_prompt="yes"))
-        if XTERM_DEBUG: Thread(target=self.debug_proc_end, daemon=True).start()
 
     def resize(self, *, width:int, height:int) -> None:
         assert isinstance(width, int), "TypeError"
         assert isinstance(height, int), "TypeError"
-        self.pipe.write(encode_print(f"\x1b[4;{height};{width}t"))
+        self.send("print", data=f"\x1b[4;{height};{width}t")
+
+
+class DebugXTermTerminal(XTermTerminal):
+    def start(self, *, into:tk.Misc=None) -> None:
+        super().start(into=into)
+        if XTERM_DEBUG: Thread(target=self.debug_proc_end, daemon=True).start()
 
     def debug_proc_end(self) -> None:
-        self.wait_ended()
-        stdout:bytes = self.proc.stdout.read()
-        stderr:bytes = self.proc.stderr.read()
-        if len(stdout+stderr) > 0:
+        def inner(_:Event=None) -> None:
+            stdout:bytes = self.proc.stdout.read()
+            stderr:bytes = self.proc.stderr.read()
             print(" stdout ".center(80, "#"))
-            print(stdout)
-            print(" stderr ".center(80, "#"))
-            print(stderr)
+            if len(stdout+stderr) > 0:
+                print(stdout)
+                print(" stderr ".center(80, "#"))
+                print(stderr)
+        self.bind("exit", inner)
+
+
+class GnomeTermTerminal(BaseTerminal):
+    __slots__ = ()
+
+    def start(self, *, into:tk.Misc=None) -> None:
+        self.run("gnome-terminal -- %command%")
+        self.sep_window:bool = True
+
+
+class ConhostTerminal(BaseTerminal):
+    __slots__ = ()
+
+    def start(self, *, into:tk.Misc=None) -> None:
+        self.run("conhost -- %command%")
+        self.sep_window:bool = True
 
 
 class KonsoleTerminal(BaseTerminal):
     __slots__ = ()
 
-    def start(self, slave2master:str, master2slave:str, *, into:tk.Misc=None):
-        raise NotImplementedError("Not fully implemented. " \
-                                  "Read the comment bellow")
-        args:str = KONSOLE_ARGS.format(slave2master, master2slave)
-        self.run(f"konsole {args}")
-        # Now we have to use `NoTitlebarTk._get_parent` on into
-        #   maybe even on into's tk.Tk and then use
-        #   `NoTitlebarTk._reparent_window(child, parent, x, y)`
-        #   where child is the output from "echo $WINDOWID" when run
-        #   from the slave
+    def start(self, *, into:tk.Misc=None) -> None:
+        raise NotImplementedError("Not implemented yet.")
+        command:str = f"konsole -e %command%"
+        self.sep_window:bool = True
+        self.run(command)
+        # `NoTitlebarTk._reparent_window()` and `echo $WINDOWID`
 
     def ___resize(self, width:int, height:int) -> None:
         raise RuntimeError("https://bugs.kde.org/show_bug.cgi?id=238073")
 
 
+AVAILABLE_TERMS:list[type[BaseTerminal]] = [
+                                             XTermTerminal,
+                                             DebugXTermTerminal,
+                                             KonsoleTerminal, # not working
+                                             GnomeTermTerminal, # sep window
+                                             ConhostTerminal, # sep window
+                                           ]
+
 if IS_UNIX:
     Terminal:type = XTermTerminal
+elif IS_WINDOWS:
+    Terminal:type = ConhostTerminal
 else:
     print('[WARNING]: (Terminal) NotImplementedError')
     Terminal:type = type(None)
 assert issubclass(Terminal, BaseTerminal|None), "You must subclass BaseTerminal."
 
 
-def allisinstance(iterable:Iterable, T:type) -> bool:
-    return all(map(lambda elem: isinstance(elem, T), iterable))
-
-def _assert_no_null(string:str) -> None:
-    assert isinstance(string, str), "TypeError"
-    assert "\x00" not in string, "Invalid char in string"
-
-def _encode_args(args:tuple[str]|list[str]) -> bytes:
-    assert isinstance(args, tuple|list), "TypeError"
-    assert allisinstance(args, str), "TypeError"
-    for arg in args: _assert_no_null(arg)
-    return "\x00".join(args).encode("utf-8")+b"\x00"
-
-def encode_run(cmd_id:int, args:tuple[str], string_to_print:str|None) -> bytes:
-    if string_to_print is None:
-        string_to_print:bytes = b""
-    else:
-        string_to_print:bytes = string_to_print.encode("utf-8")
-    return b"RUN" + cmd_id.to_bytes(2,"big") + len(args).to_bytes(2,"big") + \
-           _encode_args(args) + string_to_print + b"\x00"
-
-def encode_check_stdout(cmd_id:int, args:tuple[str]) -> bytes:
-    return b"CHECK_STDOUT" + cmd_id.to_bytes(2,"big") + \
-           len(args).to_bytes(2,"big") + _encode_args(args)
-
-def encode_print(text:str) -> bytes:
-    _assert_no_null(text)
-    return b"PRINTSTR"+text.encode("utf-8")+b"\x00"
-
 
 if __name__ == "__main__":
     XTERM_DEBUG:bool = True
     term:Terminal = Terminal()
-    term.pipe.write(encode_run(0, ["bash"], " Bash Started ".center(80, "=")+"\n"))
-    term.pipe.write(encode_run(1, ["python3", "/home/thelizzard/.updater.py"], " Updater Started ".center(80, "=")+"\n"))
-    while not term.ended():
-        data:bytes = term.pipe.read(100)
-        print(data)
-    term.pipe.close()
+    term.send("run", data=(sys.executable,))
+    term.bind("", lambda e: print(e))

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from PIL import Image, ImageTk
 import tkinter as tk
 
@@ -24,8 +25,8 @@ THEME_OPTIONS = ("light", "dark")
 
 # Unchangable settings:
 NUMBER_OF_CUSTOM_BUTTONS = 10 # The number of custom buttons allowed at 1 time
-MIN_WIDTH = 240 # The minimum width to hide the dummy window
-MIN_HEIGHT = 80 # The minimum height to hide the dummy window
+MIN_WIDTH = 130 # The minimum width
+MIN_HEIGHT = 45 # The minimum height
 
 
 __author__ = "TheLizzard"
@@ -428,6 +429,9 @@ class BetterTk(tk.Frame):
 
         super().focus_set()
 
+    def move_to_current_workspace(self) -> Success:
+        return self.root.move_to_current_workspace()
+
     def focus_displayof(self) -> tk.Misc|None:
         # Bug: https://github.com/python/cpython/issues/88758
         try:
@@ -714,6 +718,8 @@ class BetterTk(tk.Frame):
             self.resizable_window.resizable_horizontal = width
         if height is not None:
             self.resizable_window.resizable_vertical = height
+        self.root.resizable(self.resizable_window.resizable_horizontal,
+                            self.resizable_window.resizable_vertical)
 
         if (width is None) and (height is None):
             return (self.resizable_window.resizable_horizontal,
